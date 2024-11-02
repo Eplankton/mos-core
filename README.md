@@ -1,39 +1,41 @@
-# MOS-Kernel 🥗
+<p align="center">
+<img src="pic/mos_logo.svg" width="25%">
+</p>
 
 ### Introduction 🦉
 ```
- A_A       _
-o'' )_____//    [MOS-Kernel]
- `_/  MOS  )    Simple Preemptive RTOS Kernel on Cortex-M
- (_(_/--(_/     MOS <=> Mini-RTOS
+ A_A       _    MOS Real-Time Operating System
+o'' )_____//    Simple RTOS on Cortex-M
+ `_/  MOS  )    Developed using C/C++
+ (_(_/--(_/     [Apache License Version 2.0]
 ```
 
 ### Repository 📦
-[Gitee](https://gitee.com/Eplankton/mos-kernel) | [GitHub](https://github.com/Eplankton/mos-kernel) 
+- **[GitHub(English)](https://github.com/Eplankton/mos-core) | [Gitee(中文)](https://gitee.com/Eplankton/mos-core)**
 
 ### Architecture 🏀
-<img src="mos-arch.svg">
+<img src="pic/mos_arch.svg">
 
 ```
-mos
-├── config.h             System Configuration
-├── arch                 Arch-related
-│   └── cpu.hpp          asm for context_switch
+.
+├── 📁 config.h         // System configuration
+├── 📁 arch             // Architecture-specific
+│   └── cpu.hpp         // Init/Context switching asm
 │
-├── kernel               Kernel(Arch-independent)
-│   ├── macro.hpp        Kernel Constant Macros
-│   ├── type.hpp         Basic Types
-│   ├── concepts.hpp     Type Constraints(Optional)
-│   ├── data_type.hpp    Basic Data Structures
-│   ├── alloc.hpp        Static/Dynamic Allocator
-│   ├── global.hpp       Kernel Globals
-│   ├── printf.c         Thread-safe printf
-│   ├── task.hpp         Task control
-│   ├── sync.hpp         Sync primitives
-│   ├── scheduler.hpp    Scheduler and Policy
-│   ├── ipc.hpp          Inter-Process Communication
-│   └── utils.hpp        Utils
+├── 📁 kernel           // Kernel code
+│   ├── macro.hpp       // Constant macros
+│   ├── type.hpp        // Basic types
+│   ├── concepts.hpp    // Type constraints (optional)
+│   ├── data_type.hpp   // Basic data structures
+│   ├── alloc.hpp       // Memory management
+│   ├── global.hpp      // Kernel global variables
+│   ├── printf.h/.c     // Thread-safe printf(*)
+│   ├── task.hpp        // Task control
+│   ├── sync.hpp        // Sync primitives
+│   ├── scheduler.hpp   // Scheduler
+│   ├── ipc.hpp         // Inter-Process Communication
+│   └── utils.hpp       // Other utilities
 │
-├── kernel.hpp           Import Kernel Modules
-└── shell.hpp            Simple Shell
+├── kernel.hpp          // Kernel module
+└── shell.hpp           // Command line
 ```

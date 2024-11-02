@@ -10,14 +10,14 @@ namespace MOS::DataType
 	using namespace Macro;
 
 	// Task Control Block
-	struct __attribute__((packed)) TCB_t
+	struct MOS_PACKED TCB_t
 	{
 		using Self_t        = TCB_t;
 		using SelfPtr_t     = TCB_t*;
 		using TcbPtr_t      = SelfPtr_t;
 		using ConstTcbPtr_t = const TCB_t*;
 		using StackPtr_t    = uint32_t*;
-		using Node_t        = ListNode_t;
+		using Node_t        = List_t::Node_t;
 		using Tid_t         = int16_t;
 		using Prior_t       = int8_t;
 		using Tick_t        = uint32_t;
@@ -37,21 +37,24 @@ namespace MOS::DataType
 		using enum Status;
 		using enum Page_t::Policy;
 
-		// Don't change the offset of node and sp
-		Node_t node;
+		// Don't change the offset of link and sp
+		Node_t link;
 		StackPtr_t sp = nullptr;
 
 		// Add more members here
-		Tid_t tid         = -1;
-		TcbPtr_t parent   = nullptr;
-		Page_t page       = {ERROR, nullptr, 0};
-		Prior_t pri       = PRI_MIN;
-		Status status     = TERMINATED;
+		Status status   = TERMINATED;
+		Tid_t tid       = -1;
+		Page_t page     = {ERROR, nullptr, 0};
+		TcbPtr_t parent = nullptr;
+
 		Tick_t time_slice = TIME_SLICE,
 		       wake_point = -1,
 		       stamp      = -1;
 
-		// For events like send/recv/...
+		Prior_t pri     = PRI_MIN,
+		        old_pri = PRI_NONE;
+
+		// For events like Send/Recv/...
 		Node_t event;
 
 		// Only for debug
@@ -69,26 +72,20 @@ namespace MOS::DataType
 		MOS_INLINE inline TcbPtr_t
 		next() const volatile
 		{
-			return (TcbPtr_t) node.next;
+			return (TcbPtr_t) link.next;
 		}
 
 		MOS_INLINE inline TcbPtr_t
 		prev() const volatile
 		{
-			return (TcbPtr_t) node.prev;
+			return (TcbPtr_t) link.prev;
 		}
 
-		void deinit() volatile
+		inline void
+		release() volatile
 		{
-			Page_t inactive {
-			    .policy = page.get_policy(),
-			    .raw    = page.get_raw(),
-			    // Ignore the size
-			};
-
-			// Use inplace new
-			new ((void*) this) TCB_t {};
-			inactive.recycle();
+			link.deinit();
+			page.recycle();
 		}
 
 		MOS_INLINE inline void
@@ -155,6 +152,24 @@ namespace MOS::DataType
 		get_pri() const volatile
 		{
 			return pri;
+		}
+
+		MOS_INLINE inline void // Used in Mutex
+		store_pri(Prior_t new_pri) volatile
+		{
+			if (old_pri == PRI_NONE) {
+				old_pri = pri;
+				set_pri(new_pri);
+			}
+		}
+
+		MOS_INLINE inline void // Used in Mutex
+		restore_pri() volatile
+		{
+			if (old_pri != PRI_NONE) {
+				set_pri(old_pri);
+				old_pri = PRI_NONE;
+			}
 		}
 
 		MOS_INLINE inline void
@@ -286,18 +301,18 @@ namespace MOS::DataType
 		using List_t::size;
 		using List_t::empty;
 
-		MOS_INLINE inline TcbPtr_t
+		MOS_INLINE inline auto
 		begin() const { return (TcbPtr_t) List_t::begin(); }
 
-		MOS_INLINE inline TcbPtr_t
+		MOS_INLINE inline auto
 		end() const { return (TcbPtr_t) List_t::end(); }
 
 		MOS_INLINE inline void
 		iter(TcbListIterFn auto&& fn) const
 		{
 			auto wrap = [](auto&& fn) {
-				return [&](const Node_t& node) {
-					fn((const TCB_t&) node);
+				return [&](const Node_t& link) {
+					fn((const TCB_t&) link);
 				};
 			};
 
@@ -308,8 +323,8 @@ namespace MOS::DataType
 		iter_mut(TcbListIterMutFn auto&& fn)
 		{
 			auto wrap = [](auto&& fn) {
-				return [&](Node_t& node) {
-					fn((TCB_t&) node);
+				return [&](Node_t& link) {
+					fn((TCB_t&) link);
 				};
 			};
 
@@ -330,7 +345,7 @@ namespace MOS::DataType
 		MOS_INLINE inline void
 		insert(TcbPtr_t tcb, TcbPtr_t pos)
 		{
-			List_t::insert(tcb->node, (NodePtr_t) pos);
+			List_t::insert(tcb->link, (NodePtr_t) pos);
 		}
 
 		inline void
@@ -342,16 +357,16 @@ namespace MOS::DataType
 				};
 			};
 
-			List_t::insert_in_order(tcb->node, wrap(cmp));
+			List_t::insert_in_order(tcb->link, wrap(cmp));
 		}
 
 		MOS_INLINE inline void
-		add(TcbPtr_t tcb) { List_t::add(tcb->node); }
+		add(TcbPtr_t tcb) { List_t::add(tcb->link); }
 
 		MOS_INLINE inline void
 		remove(TcbPtr_t tcb)
 		{
-			List_t::remove(tcb->node);
+			List_t::remove(tcb->link);
 		}
 
 		MOS_INLINE inline void

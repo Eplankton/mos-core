@@ -6,25 +6,31 @@
 
 namespace MOS::DataType
 {
-	struct ListNode_t
+	struct MOS_PACKED ListNode_t
 	{
 		using Self_t    = ListNode_t;
 		using SelfPtr_t = Self_t*;
 
 		// Self-linked as default
 		SelfPtr_t prev = this, next = this;
+
+		MOS_INLINE inline void
+		deinit() volatile { new ((void*) this) Self_t {}; }
 	};
 
-	using Concepts::Invocable;
+	namespace // private cmp checker
+	{
+		using Concepts::Invocable;
 
-	template <typename Fn, typename Ret = void>
-	concept ListIterFn = Invocable<Fn, Ret, const ListNode_t&>;
+		template <typename Fn, typename Ret = void>
+		concept ListIterFn = Invocable<Fn, Ret, const ListNode_t&>;
 
-	template <typename Fn, typename Ret = void>
-	concept ListIterMutFn = Invocable<Fn, Ret, ListNode_t&>;
+		template <typename Fn, typename Ret = void>
+		concept ListIterMutFn = Invocable<Fn, Ret, ListNode_t&>;
 
-	template <typename Fn>
-	concept NodeCmpFn = Invocable<Fn, bool, const ListNode_t&, const ListNode_t&>;
+		template <typename Fn>
+		concept NodeCmpFn = Invocable<Fn, bool, const ListNode_t&, const ListNode_t&>;
+	}
 
 	using List_t = struct ListImpl_t
 	{
@@ -103,8 +109,7 @@ namespace MOS::DataType
 			     next  = node.next;
 			prev->next = next;
 			next->prev = prev;
-			node.next  = &node;
-			node.prev  = &node;
+			node.deinit();
 			len -= 1;
 		}
 

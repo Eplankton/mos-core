@@ -2,6 +2,7 @@
 #define _MOS_UTILS_
 
 #include <stdint.h>
+#include <stdatomic.h>
 #include <stddef.h>
 
 #include "../config.h"
@@ -13,31 +14,36 @@
 #define MOS_FLATTEN   __attribute__((flatten))
 #define MOS_INLINE    __attribute__((always_inline))
 #define MOS_NO_INLINE __attribute__((noinline))
+#define MOS_NAKED     __attribute__((naked))
+#define MOS_USED      __attribute__((used))
+#define MOS_PACKED    __attribute__((packed))
 
 #if (MOS_CONF_PRINTF)
 #include "printf.h"
-#define kprintf(format, ...) printf_(format, ##__VA_ARGS__)
-#define MOS_MSG(format, ...) kprintf("[MOS]: " format "\n", ##__VA_ARGS__)
+#define MOS_PUTCHAR       _putchar
+#define kprintf(fmt, ...) printf_(fmt, ##__VA_ARGS__)
+#define MOS_MSG(fmt, ...) kprintf("[MOS]: " fmt "\n", ##__VA_ARGS__)
 #else
-#define kprintf(format, ...) ((void) 0)
-#define MOS_MSG(format, ...) ((void) 0)
+#define MOS_PUTCHAR       ((void) 0)
+#define kprintf(fmt, ...) ((void) 0)
+#define MOS_MSG(fmt, ...) ((void) 0)
 #endif
 
 #if (MOS_CONF_ASSERT)
-#define MOS_ASSERT(expr, format, ...) \
-	((expr) ? ((void) 0) : mos_assert_failed((uint8_t*) __FILE__, __LINE__, format))
+#define MOS_ASSERT(expr, fmt, ...) \
+	((expr) ? ((void) 0) : mos_assert_failed((uint8_t*) __FILE__, __LINE__, (uint8_t*) __func__, fmt))
 
 static inline void
-mos_assert_failed(void* file, uint32_t line, const char* msg)
+mos_assert_failed(void* file, uint32_t line, void* func, const char* msg)
 {
-	MOS_MSG("%s, %d: %s", file, line, msg);
+	MOS_MSG("%s(%d) <%s>: \"%s\"", file, line, func, msg);
 	while (true) {
-		asm volatile("");
+		MOS_NOP();
 	}
 }
 
 #else
-#define MOS_ASSERT(expr, format, ...) ((void) 0)
+#define MOS_ASSERT(expr, fmt, ...) ((void) 0)
 #endif
 
 namespace MOS::Utils
@@ -46,7 +52,7 @@ namespace MOS::Utils
 	portable_delay(volatile uint32_t n)
 	{
 		while (n--) {
-			asm volatile("");
+			MOS_NOP();
 		}
 	}
 
@@ -72,10 +78,7 @@ namespace MOS::Utils
 	}
 
 	inline int
-	strcmp(
-	    const char* str1,
-	    const char* str2
-	) noexcept
+	strcmp(const char* str1, const char* str2) noexcept
 	{
 		while (*str1 && (*str1 == *str2)) {
 			++str1;
@@ -86,8 +89,7 @@ namespace MOS::Utils
 
 	inline int
 	strncmp(
-	    const char* str1,
-	    const char* str2, size_t n
+	    const char* str1, const char* str2, size_t n
 	) noexcept
 	{
 		for (size_t i = 0; i < n; i++) {
@@ -111,11 +113,11 @@ namespace MOS::Utils
 	}
 
 	inline void*
-	memset(void* ptr, int32_t value, size_t n)
+	memset(void* ptr, uint8_t value, size_t n)
 	{
 		auto raw = (uint8_t*) ptr;
 		for (size_t i = 0; i < n; i++) {
-			raw[i] = (uint8_t) value;
+			raw[i] = value;
 		}
 		return ptr;
 	}
@@ -126,8 +128,9 @@ namespace MOS::Utils
 		const Raw_t st, ed, n;
 
 		MOS_INLINE
-		inline Range(Raw_t _st, Raw_t _ed, Raw_t _n = 1)
-		    : st(_st), ed(_ed), n(_n) {}
+		inline Range(
+		    Raw_t _st, Raw_t _ed, Raw_t _n = 1
+		): st(_st), ed(_ed), n(_n) {}
 
 		struct Iter_t
 		{
@@ -165,13 +168,29 @@ namespace MOS::Utils
 		rend() const { return {st - n, -n}; }
 	};
 
-	struct DisIntrGuard_t
+	// Enter/Exit Global Critical Section
+	struct IrqGuard_t
 	{
-		MOS_INLINE
-		inline DisIntrGuard_t() { MOS_DISABLE_IRQ(); }
+		using NestCnt_t = volatile atomic_uint32_t;
 
 		MOS_INLINE
-		inline ~DisIntrGuard_t() { MOS_ENABLE_IRQ(); }
+		inline IrqGuard_t()
+		{
+			MOS_DISABLE_IRQ();
+			cnt += 1;
+		}
+
+		MOS_INLINE
+		inline ~IrqGuard_t()
+		{
+			cnt -= 1;
+			if (cnt <= 0) {
+				MOS_ENABLE_IRQ();
+			}
+		}
+
+	private:
+		static inline NestCnt_t cnt = 0;
 	};
 
 	template <typename T>
@@ -190,7 +209,21 @@ namespace MOS::Utils
 }
 
 // Inplace new
-MOS_INLINE inline void*
-operator new(size_t, void* addr) noexcept { return addr; }
+// MOS_INLINE inline void*
+// operator new(size_t, void* addr) noexcept { return addr; }
+
+#include <new>
+
+MOS_INLINE inline constexpr uint32_t
+operator"" _ms(uint64_t raw) noexcept
+{
+	return raw * MOS_CONF_SYSTICK / 1000;
+}
+
+MOS_INLINE inline constexpr uint32_t
+operator"" _s(uint64_t raw) noexcept
+{
+	return raw * MOS_CONF_SYSTICK;
+}
 
 #endif

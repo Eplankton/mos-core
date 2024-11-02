@@ -3,7 +3,7 @@
 
 #include "task.hpp"
 
-namespace MOS::Sync
+namespace MOS::Kernel::Sync
 {
 	using namespace Macro;
 	using namespace Utils;
@@ -29,18 +29,17 @@ namespace MOS::Sync
 		MOS_INLINE
 		inline Sema_t(int32_t _cnt): cnt(_cnt) {}
 
-		// P
+		// `P-opr`
 		MOS_NO_INLINE void
 		down()
 		{
 			// Assert if irq disabled
 			MOS_ASSERT(test_irq(), "Disabled Interrupt");
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			cnt -= 1;
 			if (cnt < 0) {
 				Task::block_to_raw(
-				    Task::current(),
-				    waiting_list
+				    Task::current(), waiting_list
 				);
 				return Task::yield();
 			}
@@ -51,9 +50,9 @@ namespace MOS::Sync
 		{
 			// Assert if irq disabled
 			MOS_ASSERT(test_irq(), "Disabled Interrupt");
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			up_raw();
-			if (Task::higher_exists()) {
+			if (Task::any_higher()) {
 				return Task::yield();
 			}
 		}
@@ -68,8 +67,7 @@ namespace MOS::Sync
 		{
 			if (cnt < 0) {
 				Task::resume_raw(
-				    waiting_list.begin(),
-				    waiting_list
+				    waiting_list.begin(), waiting_list
 				);
 			}
 			cnt += 1;
@@ -112,7 +110,7 @@ namespace MOS::Sync
 		void lock() // P operation
 		{
 			MOS_ASSERT(test_irq(), "Disabled Interrupt");
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			auto cur = Task::current();
 
 			if (owner == cur) {
@@ -121,10 +119,21 @@ namespace MOS::Sync
 				return;
 			}
 
-			// Compare priority with ceiling
-			if (cur->get_pri() < ceiling) {
-				// If current priority is higher, set it as the new ceiling
+			// Compare with ceiling
+			if (pri_cmp(ceiling, cur->get_pri())) {
+				// Temporarily raise the priority
+				cur->store_pri(ceiling);
+			}
+			else {
+				// If current pri is higher, set it as the new ceiling
 				ceiling = cur->get_pri();
+
+				// Raise the pri of all tasks
+				if (owner != nullptr) {
+					owner->store_pri(ceiling);
+				}
+
+				update_pri();
 			}
 
 			sema.cnt -= 1;
@@ -134,7 +143,7 @@ namespace MOS::Sync
 				return Task::yield();
 			}
 			else {
-				owner = Task::current();
+				owner = cur;
 				recursive += 1;
 			}
 		}
@@ -147,26 +156,31 @@ namespace MOS::Sync
 			    "Lock can only be released by holder"
 			);
 
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			recursive -= 1;
 
 			if (recursive > 0) {
-				// If the lock is still held by this owner
+				// Still held by this owner
 				return;
 			}
 
-			// If has waiting tasks
+			// Restore old_pri for owner
+			owner->restore_pri();
+
 			if (!sema.waiting_list.empty()) {
-				// Starvation Prevention
+				auto old_ceiling = ceiling;
+				find_ceiling();
+				if (pri_cmp(old_ceiling, ceiling)) {
+					update_pri();
+				}
+
 				auto tcb = sema.waiting_list.begin();
 				Task::resume_raw(tcb, sema.waiting_list);
 
 				owner = tcb;
 				sema.cnt += 1;
 
-				update_ceiling();
-
-				if (Task::higher_exists()) {
+				if (Task::any_higher()) {
 					return Task::yield();
 				}
 			}
@@ -183,7 +197,7 @@ namespace MOS::Sync
 		}
 
 		MOS_INLINE inline auto
-		exec(auto&& section) // To protect certain routine
+		exec(auto&& section)
 		{
 			lock();
 			section();
@@ -196,14 +210,30 @@ namespace MOS::Sync
 		TcbPtr_t owner  = nullptr;
 		Prior_t ceiling = PRI_MIN;
 
+		MOS_INLINE static inline bool
+		pri_cmp(Prior_t lhs, Prior_t rhs)
+		{
+			return lhs < rhs;
+		}
+
 		MOS_INLINE inline void
-		update_ceiling()
+		update_pri()
+		{
+			sema.waiting_list.iter_mut(
+			    [&](TCB_t& tcb) {
+				    tcb.store_pri(ceiling);
+			    }
+			);
+		}
+
+		MOS_INLINE inline void
+		find_ceiling()
 		{
 			ceiling = PRI_MIN;
 			sema.waiting_list.iter(
 			    [&](const TCB_t& tcb) {
-				    const auto pri = tcb.get_pri();
-				    if (pri < ceiling) {
+				    auto pri = tcb.get_pri();
+				    if (pri_cmp(pri, ceiling)) {
 					    ceiling = pri;
 				    }
 			    }
@@ -297,8 +327,8 @@ namespace MOS::Sync
 		    Invocable<bool> auto&& pred
 		)
 		{
-			mtx.unlock(); // Unlock first
-			while (!pred()) {
+			mtx.unlock();     // Unlock first
+			while (!pred()) { // Avoid false wakeup
 				block_this();
 			}
 			mtx.lock();
@@ -306,7 +336,7 @@ namespace MOS::Sync
 
 		inline void notify() // Signal
 		{
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			if (has_waiters()) {
 				wake_up();
 			}
@@ -315,7 +345,7 @@ namespace MOS::Sync
 
 		inline void notify_all() // Broadcast
 		{
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			while (has_waiters()) {
 				wake_up();
 			}
@@ -328,10 +358,9 @@ namespace MOS::Sync
 		MOS_INLINE inline void
 		block_this()
 		{
-			DisIntrGuard_t guard;
+			IrqGuard_t guard;
 			Task::block_to_raw(
-			    Task::current(),
-			    waiting_list
+			    Task::current(), waiting_list
 			);
 			return Task::yield();
 		}
@@ -339,10 +368,8 @@ namespace MOS::Sync
 		MOS_INLINE inline void
 		wake_up()
 		{
-			DisIntrGuard_t guard;
 			Task::resume_raw(
-			    waiting_list.begin(),
-			    waiting_list
+			    waiting_list.begin(), waiting_list
 			);
 		}
 	};
@@ -350,7 +377,7 @@ namespace MOS::Sync
 	struct Barrier_t
 	{
 		MutexImpl_t mtx;
-		CondVar_t cond;
+		CondVar_t cv;
 		Cnt_t total, cnt = 0;
 
 		MOS_INLINE
@@ -360,12 +387,12 @@ namespace MOS::Sync
 		{
 			mtx.exec([&] {
 				cnt += 1;
-				cond.wait(mtx, [&] { return cnt == total; });
-				if (!cond.has_waiters()) {
-					cnt = 0;
+				cv.wait(mtx, [&] { return cnt == total; });
+				if (!cv.has_waiters()) {
+					cnt = 0; // Reuse Barrier
 				}
 			});
-			cond.notify_all();
+			cv.notify_all();
 		}
 	};
 }

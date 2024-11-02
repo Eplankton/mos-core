@@ -6,9 +6,9 @@
 #include "global.hpp"
 #include "alloc.hpp"
 
-namespace MOS::Task
+namespace MOS::Kernel::Task
 {
-	using namespace KernelGlobal;
+	using namespace Global;
 	using namespace Concepts;
 	using namespace Utils;
 	using namespace Alloc;
@@ -22,7 +22,6 @@ namespace MOS::Task
 	using Tick_t   = TCB_t::Tick_t;
 	using TcbPtr_t = TCB_t::TcbPtr_t;
 
-	using enum Page_t::Policy;
 	using enum TCB_t::Status;
 
 	MOS_INLINE inline TcbPtr_t
@@ -33,7 +32,7 @@ namespace MOS::Task
 
 	// Whether task with higher priority than tcb exists
 	MOS_INLINE inline bool
-	higher_exists(TcbPtr_t tcb = current())
+	any_higher(TcbPtr_t tcb = current())
 	{
 		return tcb != ready_list.begin();
 	}
@@ -49,18 +48,7 @@ namespace MOS::Task
 	}
 
 	MOS_INLINE inline void
-	nop_and_yield()
-	{
-		dec_tmslc();
-		yield();
-	}
-
-	MOS_INLINE inline Tick_t
-	inc_ticks()
-	{
-		os_ticks += 1;
-		return os_ticks;
-	}
+	inc_ticks() { os_ticks += 1; }
 
 	MOS_INLINE inline Tid_t
 	tid_alloc()
@@ -73,22 +61,14 @@ namespace MOS::Task
 	// Used in idle task
 	inline void recycle()
 	{
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		while (!zombie_list.empty()) {
 			auto tcb = zombie_list.begin();
-
-			// Remove from zombie_list
-			zombie_list.remove(tcb);
-
-			// Reset tcb to default
-			tcb->deinit();
+			zombie_list.remove(tcb); // Remove from zombie_list
+			tcb->release();          // Release resources
 		}
 		return yield();
 	}
-
-	// For debug only
-	MOS_INLINE inline auto
-	num() { return debug_tcbs.size(); }
 
 	inline void
 	terminate_raw(TcbPtr_t tcb)
@@ -104,33 +84,26 @@ namespace MOS::Task
 			blocked_list.remove(tcb);
 		}
 
-		// Mark tcb as TERMINATED and add to zombie_list
-		tcb->set_status(TERMINATED);
+		tcb->set_status(TERMINATED); // Mark tcb as TERMINATED
+		tids.reset(tcb->get_tid());  // Clear the bit in tids
+		debug_tcbs.remove(tcb);      // For debug only
 
-		// Clear the bit in tids
-		tids.reset(tcb->get_tid());
-
-		// For debug only
-		debug_tcbs.remove(tcb);
-
-		// Only DYNAMIC pages need delayed recycling
+		// Only `DYNAMIC` pages need delayed recycling
 		if (tcb->page.is_policy(DYNAMIC)) {
-			zombie_list.add(tcb);
+			zombie_list.add(tcb); // Add to zombie_list
 		}
-		else {
-			// Otherwise for POOL or STATIC, just deinit immediately
-			tcb->deinit();
+		else { // Otherwise for `POOL` or `STATIC` just release immediately
+			tcb->release();
 		}
 	}
 
-	inline void terminate(TcbPtr_t tcb = current())
+	inline void
+	terminate(TcbPtr_t tcb = current())
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
-
+		IrqGuard_t guard;
 		if (tcb == nullptr || tcb->is_status(TERMINATED))
 			return;
-
 		terminate_raw(tcb);
 		if (tcb == current()) {
 			return yield();
@@ -140,8 +113,8 @@ namespace MOS::Task
 	MOS_INLINE static inline void
 	exit() { terminate(current()); }
 
-	MOS_INLINE static inline TcbPtr_t
-	setup_context(TcbPtr_t tcb)
+	MOS_INLINE static inline void
+	load_context(TcbPtr_t tcb)
 	{
 		// A descending stack consists of 16 registers as context.
 		// high -> low, descending stack
@@ -150,51 +123,66 @@ namespace MOS::Task
 
 		// Set the 'T' bit in stacked xPSR to '1' to notify processor on exception return about the Thumb state.
 		// V6-m and V7-m cores can only support Thumb state so it should always be set to '1'.
-		tcb->set_xpsr((uint32_t) 0x01000000);
-
-		// Set the stacked PC
-		tcb->set_pc((uint32_t) tcb->fn);
-
-		// Call terminate(current()) automatically
-		tcb->set_lr((uint32_t) exit);
-
-		// Set arguments
-		tcb->set_argv((uint32_t) tcb->argv);
-
-		return tcb;
+		tcb->set_xpsr((uint32_t) 0x0100'0000);
+		tcb->set_pc((uint32_t) tcb->fn);     // Set the stacked PC as entry
+		tcb->set_lr((uint32_t) exit);        // Call terminate() automatically
+		tcb->set_argv((uint32_t) tcb->argv); // Set arguments to R0
 	}
 
-	// clang-format off
-	template <typename Fn, typename ArgvType>
-	concept LambdaInvocable = requires(Fn fn, ArgvType argv) {
-		{ fn.operator()(argv) } -> Same<void>;
-	};
-	// clang-format on
-
-	template <typename Fn, typename ArgvType>
-	concept AsLambdaFn =
-	    LambdaInvocable<Fn, ArgvType> ||
-	    LambdaInvocable<Fn, deref_t<ArgvType>*> ||
-	    LambdaInvocable<Fn, deref_t<ArgvType>&>;
-
-	template <typename Fn, typename ArgvType>
-	concept AsFnPtr =
-	    Invocable<Fn, void, ArgvType> ||
-	    Invocable<Fn, void, deref_t<ArgvType>*> ||
-	    Invocable<Fn, void, deref_t<ArgvType>&>;
-
-	MOS_INLINE static inline constexpr Fn_t
-	type_check(auto fn, auto argv)
+	namespace // private checker concepts
 	{
-		if constexpr (AsLambdaFn<decltype(fn), decltype(argv)>) {
-			return (Fn_t) ((uint32_t) + fn); // '+fn' convert lambda into FnPtr
-		}
-		else {
-			static_assert(
-			    AsFnPtr<decltype(fn), decltype(argv)>,
-			    "Mismatched Invoke Type!"
-			);
-			return (Fn_t) ((uint32_t) fn);
+		template <typename Fn, typename ArgvRef>
+		concept LambdaArgvCheck =
+		    Same<
+		        decltype(&Fn::operator()),
+		        void (Fn::*)(ArgvRef) const> ||
+		    Same<
+		        decltype(&Fn::operator()),
+		        void (Fn::*)(const_ref_t<ArgvRef>) const>;
+
+		// clang-format off
+		template <typename Fn, typename Argv>
+		concept LambdaInvoke =
+		(LambdaArgvCheck<Fn, Argv> &&
+			requires(Fn fn, Argv argv) {
+				{ fn.operator()(argv) } -> Same<void>;
+		}) ||
+		requires(Fn fn) {
+			{ fn.operator()() } -> Same<void>;
+		};
+		// clang-format on
+
+		template <typename Fn, typename Argv>
+		concept AsLambda =
+		    (Pointer<Argv> &&
+		     (LambdaInvoke<Fn, deref_t<Argv>*> ||
+		      LambdaInvoke<Fn, deref_t<Argv>&>) ) ||
+		    (!Pointer<Argv> && LambdaInvoke<Fn, Argv>);
+
+		template <typename Fn, typename Argv>
+		concept AsFnPtr =
+		    (Pointer<Argv> &&
+		     (Invocable<Fn, void, deref_t<Argv>*> ||
+		      Invocable<Fn, void, deref_t<Argv>&>) ) ||
+		    (!Pointer<Argv> &&
+		     (Invocable<Fn, void> || Invocable<Fn, void, Argv>) );
+
+		MOS_INLINE static inline constexpr auto
+		type_check(auto fn, auto argv)
+		{
+			using RawFn_t   = decltype(fn);
+			using RawArgv_t = decltype(argv);
+
+			if constexpr (AsLambda<RawFn_t, RawArgv_t>) {
+				return (Fn_t) ((uint32_t) + fn);
+			}
+			else {
+				static_assert(
+				    AsFnPtr<RawFn_t, RawArgv_t>,
+				    "Invalid Invoke Type!"
+				);
+				return (Fn_t) ((uint32_t) fn);
+			}
 		}
 	}
 
@@ -205,8 +193,6 @@ namespace MOS::Task
 	)
 	{
 		MOS_ASSERT(fn != nullptr, "fn can't be null");
-		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
 
 		if (page.get_raw() == nullptr) {
 			MOS_MSG("Page Alloc Failed!");
@@ -221,32 +207,21 @@ namespace MOS::Task
 		// Construct a tcb at the head of a page
 		auto cur = current(),
 		     tcb = TCB_t::build(
-		         type_check(fn, argv),
-		         (Argv_t) argv,
+		         type_check(fn, argv), (Argv_t) argv,
 		         pri, name, page
 		     );
 
-		// Load empty context
-		setup_context(tcb);
+		load_context(tcb);         // Load Context
+		tcb->set_tid(tid_alloc()); // Set Tid
+		tcb->set_stamp(os_ticks);  // Set Timestamp
+		tcb->set_parent(cur);      // Set Parent
+		tcb->set_status(READY);    // Set Status into READY
 
-		// Give Tid
-		tcb->set_tid(tid_alloc());
+		ready_list.insert_in_order( // Add to ready_list
+		    tcb, TCB_t::pri_cmp
+		);
 
-		// Set Time Stamp
-		tcb->set_stamp(os_ticks);
-
-		// Set parent
-		tcb->set_parent(cur);
-
-		// Set tcb to be READY
-		tcb->set_status(READY);
-
-		// Add to ready_list
-		ready_list.insert_in_order(tcb, TCB_t::pri_cmp);
-
-		// For debug only
-		debug_tcbs.add(tcb);
-
+		debug_tcbs.add(tcb); // For debug only
 		return tcb;
 	}
 
@@ -266,12 +241,18 @@ namespace MOS::Task
 	    Name_t name, Page_t page
 	)
 	{
-		auto tcb = create_raw(
-		    fn, argv, pri, name, page
-		);
+		MOS_ASSERT(test_irq(), "Disabled Interrupt");
+		TcbPtr_t tcb = nullptr;
+
+		{
+			IrqGuard_t guard;
+			tcb = create_raw(fn, argv, pri, name, page);
+		}
+
 		if (TCB_t::pri_cmp(tcb, current())) {
 			yield();
 		}
+
 		return tcb;
 	}
 
@@ -295,7 +276,7 @@ namespace MOS::Task
 		return create(fn, argv, pri, name, page);
 	}
 
-	// Create task from dynamic allocated memory
+	// Create task from dynamic memory
 	MOS_INLINE inline TcbPtr_t
 	create(
 	    auto fn, auto argv, Prior_t pri,
@@ -341,7 +322,7 @@ namespace MOS::Task
 	block_to(TcbPtr_t tcb, TcbList_t& dest)
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		if (tcb == nullptr || tcb->is_status(BLOCKED))
 			return;
 		block_to_raw(tcb, dest);
@@ -358,7 +339,7 @@ namespace MOS::Task
 	)
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		if (tcb == nullptr || tcb->is_status(BLOCKED))
 			return;
 		block_to_in_order_raw(tcb, dest, cmp);
@@ -380,11 +361,7 @@ namespace MOS::Task
 	)
 	{
 		tcb->set_status(READY);
-		src.send_to_in_order(
-		    tcb,
-		    ready_list,
-		    TCB_t::pri_cmp
-		);
+		src.send_to_in_order(tcb, ready_list, TCB_t::pri_cmp);
 	}
 
 	inline void
@@ -394,11 +371,11 @@ namespace MOS::Task
 	)
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		if (tcb == nullptr || !tcb->is_status(BLOCKED))
 			return;
 		resume_raw(tcb, src);
-		if (higher_exists()) {
+		if (any_higher()) {
 			return yield();
 		}
 	}
@@ -410,7 +387,7 @@ namespace MOS::Task
 	)
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		if (tcb == nullptr || !tcb->is_status(BLOCKED))
 			return;
 		resume_raw(tcb, src);
@@ -420,10 +397,10 @@ namespace MOS::Task
 	change_pri(TcbPtr_t tcb, Prior_t pri)
 	{
 		MOS_ASSERT(test_irq(), "Disabled Interrupt");
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		tcb->set_pri(pri);
 		ready_list.re_insert(tcb, TCB_t::pri_cmp);
-		if (higher_exists()) {
+		if (any_higher()) {
 			return yield();
 		}
 	}
@@ -431,7 +408,7 @@ namespace MOS::Task
 	inline TcbPtr_t
 	find(auto info)
 	{
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 
 		auto fetch = [info](TcbPtr_t tcb) {
 			if constexpr (Same<decltype(info), Tid_t>) {
@@ -449,7 +426,7 @@ namespace MOS::Task
 	MOS_INLINE inline void
 	print_name()
 	{
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		kprintf("%s\n", current()->get_name());
 	}
 
@@ -484,7 +461,7 @@ namespace MOS::Task
 	// For debug only
 	inline void print_all()
 	{
-		DisIntrGuard_t guard;
+		IrqGuard_t guard;
 		kprintf("-------------------------------------\n");
 		debug_tcbs.iter([](TcbPtr_t tcb) { print_info(tcb); });
 		kprintf("-------------------------------------\n");
@@ -494,111 +471,14 @@ namespace MOS::Task
 	{
 		auto cur = current();
 		cur->set_wkpt(os_ticks + ticks);
-		block_to_in_order(
-		    cur,
-		    sleeping_list,
-		    TCB_t::wkpt_cmp
-		);
+		block_to_in_order(cur, sleeping_list, TCB_t::wkpt_cmp);
 	}
 
 	inline void
 	wake_raw(TcbPtr_t tcb)
 	{
-		tcb->set_wkpt(-1);
+		tcb->set_wkpt(0xFFFF'FFFF); // Set wakepoint as invalid
 		Task::resume_raw(tcb, sleeping_list);
-	}
-
-	inline namespace Async
-	{
-		struct Future_t
-		{
-			struct Stamp_t
-			{
-				Tick_t stmp = 0;
-				Tid_t tid   = -1;
-
-				MOS_INLINE Stamp_t(TcbPtr_t tcb)
-				    : tid(tcb->get_tid()),
-				      stmp(tcb->get_stamp()) {}
-
-				// A distinguishable task can be marked by tid and stamp(os_ticks)
-				MOS_INLINE inline bool
-				check(TcbPtr_t tcb) const
-				{
-					return tid == tcb->get_tid() &&
-					       stmp == tcb->get_stamp();
-				}
-			} stamp;
-
-			TcbPtr_t tcb;
-
-			MOS_INLINE
-			inline Future_t(TcbPtr_t tcb)
-			    : tcb(tcb), stamp(tcb) {}
-
-			MOS_INLINE
-			inline ~Future_t() { await(); }
-
-			MOS_INLINE inline bool
-			is_ready() const
-			{
-				// If tcb is invalid -> task has been deinited -> DONE (mostly)
-				// If tcb is valid, check status, TERMINATED -> DONE (rarely)
-				DisIntrGuard_t guard;
-				return !stamp.check(tcb) ||
-				       tcb->is_status(TERMINATED);
-			}
-
-			MOS_INLINE inline void
-			await()
-			{
-				// Spin Waiting
-				while (!is_ready()) {
-					delay(1);
-				}
-				tcb = nullptr;
-			}
-		};
-
-		MOS_INLINE inline auto
-		async_raw(
-		    auto fn, auto argv, Name_t name, Page_t page
-		)
-		{
-			auto tcb = create_raw(
-			    fn, argv, current()->get_pri(),
-			    name, page
-			);
-			return Future_t {tcb};
-		}
-
-		MOS_INLINE inline auto
-		async(
-		    auto fn, auto argv, Name_t name, Page_t page
-		)
-		{
-			return async_raw(
-			    fn, argv, name, page
-			);
-		}
-
-		MOS_INLINE inline auto
-		async(
-		    auto fn, auto argv, Name_t name
-		)
-		{
-			auto page = page_alloc(POOL, PAGE_SIZE);
-			return async(fn, argv, name, page);
-		}
-
-		MOS_INLINE inline auto
-		async(
-		    auto fn, auto argv, Name_t name, PgSz_t pg_sz
-		)
-		{
-			auto page = page_alloc(DYNAMIC, pg_sz);
-			return async(fn, argv, name, page);
-		}
 	}
 }
 
