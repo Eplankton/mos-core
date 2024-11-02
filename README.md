@@ -1,5 +1,5 @@
 <p align="center">
-<img src="pic/mos_logo.svg" width="25%">
+<img src="pic/mos_logo.svg">
 </p>
 
 ### Introduction 🦉
