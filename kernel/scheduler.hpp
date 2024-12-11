@@ -7,37 +7,31 @@
 
 namespace MOS::Kernel::Scheduler
 {
-	enum class SchedStatus : bool
+	enum class Status : bool
 	{
 		Ok  = true,
 		Err = !Ok,
-	} static sched_status = SchedStatus::Err;
+	} static sched_status = Status::Err;
 
 	struct SuspendGuard_t
 	{
-		using IrqGuard_t = Utils::IrqGuard_t;
-		using NestCnt_t  = volatile atomic_uint32_t;
-
 		MOS_INLINE
 		inline SuspendGuard_t()
 		{
-			IrqGuard_t guard;
 			cnt += 1;
-			sched_status = SchedStatus::Err;
+			sched_status = Status::Err;
 		}
 
 		MOS_INLINE
 		inline ~SuspendGuard_t()
 		{
-			IrqGuard_t guard;
-			cnt -= 1;
-			if (cnt <= 0) {
-				sched_status = SchedStatus::Ok;
+			if (--cnt <= 0) {
+				sched_status = Status::Ok;
 			}
 		}
 
 	private:
-		static inline NestCnt_t cnt = 0;
+		static inline Atomic_t<int32_t> cnt = 0;
 	};
 
 	MOS_INLINE inline auto
@@ -55,12 +49,12 @@ namespace MOS::Kernel::Scheduler
 		RoundRobin,
 
 		// In this policy, a task with a higher priority can preempt currently running task,
-		// `TCB_t::pri_cmp(st, cr)` compares the priority of the new task `st` with the currently running task `cr`.
+		// `pri_cmp(st, cr)` compares the priority of the new task `st` with the currently running task `cr`.
 		// If `st` has higher priority, the current task `cr` will be set to `READY` status and switched to `st`.
 		// If the `time slice` of the current task `cr` is exhausted (i.e., `cr->time_slice <= 0`),
 		// the `time_slice` will be reset to `TIME_SLICE`, and switched to the next.
 		// If there are other tasks with the same priority as `cr` that are ready
-		// to run (i.e., `nx != ed && TCB_t::pri_equal(nx, cr)`),
+		// to run (i.e., `nx != ed && pri(nx) == pri(cr)`),
 		// the scheduler will perform `RoundRobin` scheduling among these tasks (so called a `PriGroup`).
 		// Otherwise, the scheduler switches back to `st` with the highest priority.
 		PreemptPri,
@@ -68,16 +62,15 @@ namespace MOS::Kernel::Scheduler
 
 	using namespace Global;
 
-	using DataType::TCB_t;
 	using TcbPtr_t = TCB_t::TcbPtr_t;
 	using Fn_t     = TCB_t::Fn_t;
 
 	using enum TCB_t::Status;
-	using enum SchedStatus;
+	using enum Status;
 	using enum Policy;
 
 	MOS_INLINE inline bool
-	is_ready() { return sched_status == SchedStatus::Ok; }
+	is_ready() { return sched_status == Status::Ok; }
 
 	// This will execute only once for the first task
 	MOS_NAKED inline void
@@ -150,7 +143,7 @@ namespace MOS::Kernel::Scheduler
 
 		cur_tcb = ready_list.begin();
 		cur_tcb->set_status(RUNNING);
-		sched_status = SchedStatus::Ok;
+		sched_status = Status::Ok;
 		init();
 	}
 

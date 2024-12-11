@@ -9,17 +9,17 @@ namespace MOS::DataType
 	template <typename T, size_t N>
 	struct Buffer_t
 	{
-		using Raw_t = T[N];
-		using Cnt_t = volatile int32_t;
+		using Raw_t   = T[N];
+		using Count_t = Atomic_t<int32_t>;
 
 		Raw_t raw;
-		Cnt_t len = 0;
+		Count_t len = 0;
 
 		MOS_INLINE inline auto
 		get_raw() const { return raw; }
 
 		MOS_INLINE inline bool
-		full() const volatile { return len >= (Cnt_t) N; }
+		full() const volatile { return len >= (int32_t) N; }
 
 		MOS_INLINE inline bool
 		empty() const volatile { return len == 0; }

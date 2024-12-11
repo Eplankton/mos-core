@@ -2,7 +2,7 @@
 <img src="pic/mos_logo.svg">
 </p>
 
-### Introduction 🦉
+## Introduction 🦉
 ```
  A_A       _    MOS Real-Time Operating System
 o'' )_____//    Simple RTOS on Cortex-M
@@ -10,15 +10,15 @@ o'' )_____//    Simple RTOS on Cortex-M
  (_(_/--(_/     [Apache License Version 2.0]
 ```
 
-### Repository 📦
+## Repository 📦
 - **[GitHub(English)](https://github.com/Eplankton/mos-core) | [Gitee(中文)](https://gitee.com/Eplankton/mos-core)**
 
-### Architecture 🏀
+## Architecture 🏀
 <img src="pic/mos_arch.svg">
 
 ```
 .
-├── 📁 config.h         // System configuration
+├── config.h         // System configuration
 ├── 📁 arch             // Architecture-specific
 │   └── cpu.hpp         // Init/Context switching asm
 │

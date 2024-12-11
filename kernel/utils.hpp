@@ -1,12 +1,9 @@
 #ifndef _MOS_UTILS_
 #define _MOS_UTILS_
 
-#include <stdint.h>
-#include <stdatomic.h>
-#include <stddef.h>
-
 #include "../config.h"
 #include "../arch/cpu.hpp"
+#include "../type.hpp"
 
 #define container_of(ptr, type, member) \
 	(type*) ((char*) ptr - offsetof(type, member))
@@ -171,7 +168,7 @@ namespace MOS::Utils
 	// Enter/Exit Global Critical Section
 	struct IrqGuard_t
 	{
-		using NestCnt_t = volatile atomic_uint32_t;
+		using NestCnt_t = volatile Atomic_t<int32_t>;
 
 		MOS_INLINE
 		inline IrqGuard_t()
@@ -211,8 +208,6 @@ namespace MOS::Utils
 // Inplace new
 // MOS_INLINE inline void*
 // operator new(size_t, void* addr) noexcept { return addr; }
-
-#include <new>
 
 MOS_INLINE inline constexpr uint32_t
 operator"" _ms(uint64_t raw) noexcept

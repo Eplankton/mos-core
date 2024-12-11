@@ -1,8 +1,8 @@
 #ifndef _MOS_TYPE_
 #define _MOS_TYPE_
 
-#include <stdint.h>
-#include <stdatomic.h>
+#include <cstdint>
+#include <atomic>
 
 // Primitive data types
 namespace MOS
@@ -21,6 +21,9 @@ namespace MOS
 	using f64 = double;
 
 	using nullptr_t = decltype(nullptr);
+
+	template<typename T>
+	using Atomic_t = std::atomic<T>;
 }
 
 #endif

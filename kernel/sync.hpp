@@ -15,12 +15,12 @@ namespace MOS::Kernel::Sync
 	using TcbPtr_t = TCB_t::TcbPtr_t;
 	using Prior_t  = TCB_t::Prior_t;
 	using Status   = TCB_t::Status;
-	using Cnt_t    = volatile int32_t;
+	using Count_t  = Atomic_t<int32_t>;
 
 	struct Sema_t
 	{
 		TcbList_t waiting_list;
-		Cnt_t cnt;
+		Count_t cnt;
 
 		// The initial value must be set
 		MOS_INLINE
@@ -205,10 +205,10 @@ namespace MOS::Kernel::Sync
 		}
 
 	private:
-		Sema_t sema     = 1;
-		Cnt_t recursive = 0;
-		TcbPtr_t owner  = nullptr;
-		Prior_t ceiling = PRI_MIN;
+		Sema_t sema       = 1;
+		Count_t recursive = 0;
+		TcbPtr_t owner    = nullptr;
+		Prior_t ceiling   = PRI_MIN;
 
 		MOS_INLINE static inline bool
 		pri_cmp(Prior_t lhs, Prior_t rhs)
@@ -378,10 +378,10 @@ namespace MOS::Kernel::Sync
 	{
 		MutexImpl_t mtx;
 		CondVar_t cv;
-		Cnt_t total, cnt = 0;
+		Count_t total, cnt = 0;
 
 		MOS_INLINE
-		inline Barrier_t(Cnt_t _total): total(_total) {}
+		inline Barrier_t(int32_t _total): total(_total) {}
 
 		inline void wait()
 		{
