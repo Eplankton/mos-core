@@ -195,12 +195,12 @@ namespace MOS::Kernel::Task
 		MOS_ASSERT(fn != nullptr, "fn can't be null");
 
 		if (page.get_raw() == nullptr) {
-			MOS_MSG("Page Alloc Failed!");
+			LOG("Page Alloc Failed!");
 			return nullptr;
 		}
 
 		if (debug_tcbs.size() >= MAX_TASK_NUM) {
-			MOS_MSG("Max tasks!");
+			LOG("Max tasks!");
 			return nullptr;
 		}
 

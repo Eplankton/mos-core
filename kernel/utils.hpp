@@ -19,11 +19,11 @@
 #include "printf.h"
 #define MOS_PUTCHAR       _putchar
 #define kprintf(fmt, ...) printf_(fmt, ##__VA_ARGS__)
-#define MOS_MSG(fmt, ...) kprintf("[MOS]: " fmt "\n", ##__VA_ARGS__)
+#define LOG(fmt, ...) kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
 #else
 #define MOS_PUTCHAR       ((void) 0)
 #define kprintf(fmt, ...) ((void) 0)
-#define MOS_MSG(fmt, ...) ((void) 0)
+#define LOG(fmt, ...) ((void) 0)
 #endif
 
 #if (MOS_CONF_ASSERT)
@@ -33,7 +33,7 @@
 static inline void
 mos_assert_failed(void* file, uint32_t line, void* func, const char* msg)
 {
-	MOS_MSG("%s(%d) <%s>: \"%s\"", file, line, func, msg);
+	LOG("%s(%d) <%s>: \"%s\"", file, line, func, msg);
 	while (true) {
 		MOS_NOP();
 	}
@@ -205,10 +205,6 @@ namespace MOS::Utils
 	}
 }
 
-// Inplace new
-// MOS_INLINE inline void*
-// operator new(size_t, void* addr) noexcept { return addr; }
-
 MOS_INLINE inline constexpr uint32_t
 operator"" _ms(uint64_t raw) noexcept
 {
@@ -220,5 +216,8 @@ operator"" _s(uint64_t raw) noexcept
 {
 	return raw * MOS_CONF_SYSTICK;
 }
+
+// MOS_INLINE inline void*
+// operator new(size_t, void* addr) noexcept { return addr; }
 
 #endif

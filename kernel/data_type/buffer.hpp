@@ -25,7 +25,7 @@ namespace MOS::DataType
 		empty() const volatile { return len == 0; }
 
 		MOS_INLINE inline void
-		add(T data) volatile { raw[len++] = data; }
+		push(T data) volatile { raw[len++] = data; }
 
 		MOS_INLINE inline auto
 		back() const volatile

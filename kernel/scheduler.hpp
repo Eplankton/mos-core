@@ -1,9 +1,7 @@
 #ifndef _MOS_SCHEDULER_
 #define _MOS_SCHEDULER_
 
-#include "../arch/cpu.hpp"
 #include "task.hpp"
-#include "utils.hpp"
 
 namespace MOS::Kernel::Scheduler
 {

@@ -197,10 +197,10 @@ namespace MOS::Kernel::Sync
 		}
 
 		MOS_INLINE inline auto
-		exec(auto&& section)
+		proc(auto&& scope)
 		{
 			lock();
-			section();
+			scope();
 			unlock();
 		}
 
@@ -246,7 +246,7 @@ namespace MOS::Kernel::Sync
 	{
 		using Raw_t    = T;
 		using RawRef_t = Raw_t&;
-		using MutexImpl_t::exec;
+		using MutexImpl_t::proc;
 
 		struct MutexGuard_t
 		{
@@ -283,7 +283,7 @@ namespace MOS::Kernel::Sync
 	template <>
 	struct Mutex_t<> : private MutexImpl_t
 	{
-		using MutexImpl_t::exec;
+		using MutexImpl_t::proc;
 
 		struct MutexGuard_t
 		{
@@ -385,7 +385,7 @@ namespace MOS::Kernel::Sync
 
 		inline void wait()
 		{
-			mtx.exec([&] {
+			mtx.proc([&] {
 				cnt += 1;
 				cv.wait(mtx, [&] { return cnt == total; });
 				if (!cv.has_waiters()) {

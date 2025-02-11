@@ -3,12 +3,9 @@
 </p>
 
 ## 介绍 🦉
-```
- A_A       _    MOS Real-Time Operating System
-o'' )_____//    运行在 Cortex-M 上的简单实时操作系统
- `_/  MOS  )    使用 C/C++ 开发
- (_(_/--(_/     [Apache License Version 2.0]
-```
+-  **[English](https://github.com/Eplankton/mos-renode) | [中文](https://gitee.com/Eplankton/mos-renode)**
+
+**MOS** 是一个实时操作系统（RTOS）项目，包含一个抢占式内核和简易命令行(使用C++编写), 并移植了一些应用层组件(例如，**GuiLite** 和 **FatFS**)。
 
 ## 仓库 📦
 - **[Gitee(中文)](https://gitee.com/Eplankton/mos-core) | [GitHub(English)](https://github.com/Eplankton/mos-core)**
@@ -32,6 +29,7 @@ o'' )_____//    运行在 Cortex-M 上的简单实时操作系统
 │   ├── printf.h/.c      // 线程安全的 printf(*)
 │   ├── task.hpp         // 任务控制
 │   ├── sync.hpp         // 同步原语
+│   ├── async.hpp        // 异步协程
 │   ├── scheduler.hpp    // 调度器
 │   ├── ipc.hpp          // 进程间通信
 │   └── utils.hpp        // 其他工具
@@ -39,3 +37,7 @@ o'' )_____//    运行在 Cortex-M 上的简单实时操作系统
 ├── kernel.hpp           // 内核模块
 └── shell.hpp            // 命令行
 ```
+
+<p align="center">
+<img src="pic/osh-zh-en.svg">
+</p>

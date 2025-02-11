@@ -19,5 +19,6 @@
 #include "kernel/sync.hpp"
 #include "kernel/scheduler.hpp"
 #include "kernel/ipc.hpp"
+#include "kernel/async.hpp"
 
 #endif

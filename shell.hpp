@@ -9,7 +9,6 @@
 #ifndef _MOS_SHELL_
 #define _MOS_SHELL_
 
-#include "kernel/utils.hpp"
 #include "kernel/task.hpp"
 #include "kernel/data_type/buffer.hpp"
 
@@ -19,7 +18,7 @@ namespace MOS::Shell
 	using namespace Utils;
 	using namespace DataType;
 
-	struct Command_t
+	using Cmd_t = struct Command_t
 	{
 		using Ret_t  = void;
 		using Text_t = const char*;
@@ -54,9 +53,8 @@ namespace MOS::Shell
 
 			// Check whether match or not
 			auto check = [&](Text_t str) {
-				return (str[xlen] == ' ' ||
-				        str[xlen] == '\0') &&
-				       strncmp(str, text, xlen) == 0;
+				return (str[xlen] == ' ' || str[xlen] == '\0') &&
+				       (strncmp(str, text, xlen) == 0);
 			};
 
 			str = skip(str);
@@ -64,20 +62,18 @@ namespace MOS::Shell
 		}
 	};
 
-	namespace CmdCall
+	namespace CallBack
 	{
-		using Argv_t = Command_t::Argv_t;
+		using Argv_t = Cmd_t::Argv_t;
 
 		MOS_INLINE static inline void
 		bad_argv_err()
 		{
-			MOS_MSG("Invalid Arguments");
+			LOG("Invalid Arguments");
 		}
 
 		static inline void
-		task_ctrl_cmd(
-		    Argv_t argv, auto&& ok, auto&& err
-		)
+		task_ctrl_cmd(Argv_t argv, auto&& ok, auto&& err)
 		{
 			auto name = argv;
 			if (*name != '\0') {
@@ -85,7 +81,7 @@ namespace MOS::Shell
 					ok(tcb);
 				}
 				else {
-					MOS_MSG("Unknown task '%s'", name);
+					LOG("Unknown task '%s'", name);
 				}
 			}
 			else { // No arguments provided
@@ -101,7 +97,7 @@ namespace MOS::Shell
 		{
 			task_ctrl_cmd(
 			    argv, [](auto tcb) {
-				    MOS_MSG("Task '%s' terminated", tcb->get_name());
+				    LOG("Task '%s' terminated", tcb->get_name());
 				    Task::terminate(tcb);
 			    },
 			    bad_argv_err
@@ -112,8 +108,9 @@ namespace MOS::Shell
 		block_cmd(Argv_t argv)
 		{
 			task_ctrl_cmd(
-			    argv, [](auto tcb) {
-				    MOS_MSG("Task '%s' blocked", tcb->get_name());
+			    argv, 
+				[](auto tcb) {
+				    LOG("Task '%s' blocked", tcb->get_name());
 				    Task::block(tcb);
 			    },
 			    bad_argv_err
@@ -125,7 +122,7 @@ namespace MOS::Shell
 		{
 			task_ctrl_cmd(
 			    argv, [](auto tcb) {
-				    MOS_MSG("Task '%s' resumed", tcb->get_name());
+				    LOG("Task '%s' resumed", tcb->get_name());
 				    Task::resume(tcb);
 			    },
 			    bad_argv_err
@@ -150,7 +147,7 @@ namespace MOS::Shell
 		static inline void
 		reboot_cmd(Argv_t argv)
 		{
-			MOS_MSG("Reboot!\n\n");
+			LOG("Reboot!\n\n");
 			MOS_REBOOT();
 		}
 
@@ -158,7 +155,7 @@ namespace MOS::Shell
 		help_cmd(Argv_t argv);
 
 		// Add more commands to here by {"text", callback}
-		static constexpr Command_t sys_cmd_table[] = {
+		static constexpr Cmd_t sys_cmd_map[] = {
 		    {    "ls",     ls_cmd}, // List all tasks
 		    {  "kill",   kill_cmd}, // Kill a task
 		    { "block",  block_cmd}, // Block a task
@@ -168,8 +165,8 @@ namespace MOS::Shell
 		    {"reboot", reboot_cmd}, // Reboot system
 		};
 
-		using UsrCmds_t = Buffer_t<Command_t, Macro::SHELL_USR_CMD_SIZE>;
-		UsrCmds_t usr_cmd_table; // For applications to register
+		using UsrCmdMap_t = Buffer_t<Cmd_t, Macro::SHELL_USR_CMD_SIZE>;
+		UsrCmdMap_t usr_cmd_map; // For user to register
 
 		static inline void
 		help_cmd(Argv_t argv)
@@ -181,43 +178,43 @@ namespace MOS::Shell
 			};
 
 			kprintf("{");
-			show(sys_cmd_table);
-			show(usr_cmd_table);
+			show(sys_cmd_map);
+			show(usr_cmd_map);
 			kprintf("}\n");
 		}
 	}
 
 	MOS_INLINE inline void
-	add_usr_cmd(Command_t cmd)
+	add_usr_cmd(Cmd_t&& cmd)
 	{
-		CmdCall::usr_cmd_table.add(cmd);
+		CallBack::usr_cmd_map.push(cmd);
 	}
 
-	void launch(SyncRxBuf_t<Macro::SHELL_BUF_SIZE>& input)
+	void launch(SyncRxBuf_t<SHELL_BUF_SIZE>& input)
 	{
 		static auto parser = [](auto str) {
-			using CmdCall::sys_cmd_table;
-			using CmdCall::usr_cmd_table;
+			using CallBack::sys_cmd_map;
+			using CallBack::usr_cmd_map;
 
-			kprintf("> %s\n", str); // Echo
+			kprintf("> %s\n", str); // Echo the input str
 			if (str[0] != '\0') {
-				for (auto& cmd: sys_cmd_table) { // Search in System Commands
+				for (auto& cmd: sys_cmd_map) { // Search in System Commands
 					if (auto argv = cmd.match(str)) {
 						return cmd.run(argv);
 					}
 				}
 
-				for (auto& cmd: usr_cmd_table) { // Search in User Commands
+				for (auto& cmd: usr_cmd_map) { // Search in User Commands
 					if (auto argv = cmd.match(str)) {
 						return cmd.run(argv);
 					}
 				}
 
-				MOS_MSG("Unknown command '%s'", str);
+				LOG("Unknown command '%s'", str);
 			}
 		};
 
-		CmdCall::uname_cmd(nullptr);
+		CallBack::uname_cmd(nullptr);
 		Task::print_all();
 
 		while (true) {

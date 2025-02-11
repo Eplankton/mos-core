@@ -2,13 +2,10 @@
 <img src="pic/mos_logo.svg">
 </p>
 
-## Introduction 🦉
-```
- A_A       _    MOS Real-Time Operating System
-o'' )_____//    Simple RTOS on Cortex-M
- `_/  MOS  )    Developed using C/C++
- (_(_/--(_/     [Apache License Version 2.0]
-```
+## About 🦉
+-  **[English](https://github.com/Eplankton/mos-renode) | [中文](https://gitee.com/Eplankton/mos-renode)**
+
+**MOS** is a Real-Time Operating System (RTOS) project consists of a preemptive kernel and a command-line shell(both in C++) with application components(e.g., **GuiLite** and **FatFS**).
 
 ## Repository 📦
 - **[GitHub(English)](https://github.com/Eplankton/mos-core) | [Gitee(中文)](https://gitee.com/Eplankton/mos-core)**
@@ -32,6 +29,7 @@ o'' )_____//    Simple RTOS on Cortex-M
 │   ├── printf.h/.c     // Thread-safe printf(*)
 │   ├── task.hpp        // Task control
 │   ├── sync.hpp        // Sync primitives
+│   ├── async.hpp       // Async stackless coroutines
 │   ├── scheduler.hpp   // Scheduler
 │   ├── ipc.hpp         // Inter-Process Communication
 │   └── utils.hpp       // Other utilities
@@ -39,3 +37,7 @@ o'' )_____//    Simple RTOS on Cortex-M
 ├── kernel.hpp          // Kernel module
 └── shell.hpp           // Command line
 ```
+
+<p align="center">
+<img src="pic/osh-zh-en.svg">
+</p>
