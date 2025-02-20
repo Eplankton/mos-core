@@ -37,9 +37,8 @@ namespace MOS::Kernel::Async
 		// Get the static instance of the executor
 		static auto& get_executor()
 		{
-			static Executor exector;
+			static Executor exector; // static instance for Executor
 
-			// Static variable to indicate if the waker task has been spawned
 			static bool spawn = []() {
 				// Continuously polls the executor until empty
 				static auto Waker = [] {
@@ -48,11 +47,11 @@ namespace MOS::Kernel::Async
 					}
 				};
 
-				// Create a waker to poll, can be extended
+				// Create a Waker for polling, which can be extended
 				return nullptr != Task::create(Waker, nullptr, Macro::PRI_MIN, "async/exec");
 			}();
 
-			(void) spawn;
+			MOS_ASSERT(spawn, "Spawn Failed!");
 			return exector;
 		}
 
@@ -135,13 +134,13 @@ namespace MOS::Kernel::Async
 	struct PromiseRet_t
 	{
 		template <typename Type>
-		MOS_INLINE inline void return_value(Type&& val) noexcept
+		MOS_INLINE inline void
+		return_value(Type&& val) noexcept
 		{
 			value = val;
 		}
 
 		MOS_INLINE inline void unhandled_exception() noexcept {}
-
 		MOS_INLINE inline T get_value() const { return value; }
 
 	private:
@@ -232,6 +231,9 @@ namespace MOS::Kernel::Async
 		// Initialize the future with a coroutine handle
 		explicit Future_t(PromiseHandle handle): current_handle(handle) {}
 
+		Future_t(Future_t&& t) noexcept
+		    : current_handle(t.current_handle) { t.current_handle = nullptr; }
+
 		~Future_t()
 		{
 			if (current_handle) {
@@ -245,9 +247,6 @@ namespace MOS::Kernel::Async
 				}
 			}
 		}
-
-		Future_t(Future_t&& t) noexcept
-		    : current_handle(t.current_handle) { t.current_handle = nullptr; }
 
 		// Move assignment operator
 		Future_t& operator=(Future_t&& t) noexcept
@@ -365,8 +364,7 @@ namespace MOS::Kernel::Async
 
 	// Wrap a callback function into a callback awaiter
 	template <typename T, typename CallbackFunc>
-	CallbackAwaiter<T, CallbackFunc>
-	callback_wrapper(CallbackFunc callback)
+	auto callback_wrapper(CallbackFunc callback)
 	{
 		return CallbackAwaiter<T, CallbackFunc> {callback};
 	}

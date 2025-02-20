@@ -131,8 +131,7 @@ namespace MOS::Kernel::Scheduler
 			}
 		};
 
-		// Create idle task with hook, or just default
-		Task::create(
+		Task::create( // Create idle task with a hook fn, or just the default
 		    hook ? hook : idle,
 		    nullptr, PRI_MIN, "idle", idle_page
 		);

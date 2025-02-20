@@ -226,7 +226,7 @@ namespace MOS::Kernel::Task
 	}
 
 	MOS_INLINE inline Page_t
-	page_alloc(Page_t::Policy policy, PgSz_t pg_sz)
+	page_alloc(Page_t::Policy policy, PageSize_t pg_sz)
 	{
 		return Page_t {
 		    .policy = policy,
@@ -280,10 +280,10 @@ namespace MOS::Kernel::Task
 	MOS_INLINE inline TcbPtr_t
 	create(
 	    auto fn, auto argv, Prior_t pri,
-	    Name_t name, PgSz_t pg_sz
+	    Name_t name, PageSize_t page_size
 	)
 	{
-		auto page = page_alloc(DYNAMIC, pg_sz);
+		auto page = page_alloc(DYNAMIC, page_size);
 		return create(fn, argv, pri, name, page);
 	}
 

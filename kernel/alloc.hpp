@@ -7,15 +7,15 @@
 namespace MOS::Kernel::Alloc
 {
 	using Utils::IrqGuard_t;
-	using Page_t    = DataType::Page_t;
-	using PageRaw_t = Page_t::Raw_t;
-	using PgSz_t    = Page_t::Size_t;
+	using Page_t     = DataType::Page_t;
+	using PageRaw_t  = Page_t::Raw_t;
+	using PageSize_t = Page_t::Size_t;
 
 	using enum Page_t::Policy;
 
 	// Page Allocator
 	inline PageRaw_t // -1(0xFFFFFFFF) as invalid
-	palloc(Page_t::Policy policy, PgSz_t pg_sz = -1)
+	palloc(Page_t::Policy policy, PageSize_t page_size = -1)
 	{
 		IrqGuard_t guard;
 		switch (policy) {
@@ -39,8 +39,8 @@ namespace MOS::Kernel::Alloc
 			}
 
 			case DYNAMIC: {
-				MOS_ASSERT(pg_sz != -1U, "Page Size Error");
-				return new uint32_t[pg_sz];
+				MOS_ASSERT(page_size != -1U, "Page Size Error");
+				return new uint32_t[page_size];
 			}
 
 			default:

@@ -15,6 +15,9 @@ namespace MOS::DataType
 		Raw_t raw;
 		Count_t len = 0;
 
+		MOS_INLINE inline static constexpr auto
+		max_size() { return N; }
+
 		MOS_INLINE inline auto
 		get_raw() const { return raw; }
 
@@ -62,6 +65,8 @@ namespace MOS::DataType
 	template <size_t N>
 	struct SyncRxBuf_t : public RxBuf_t<N>
 	{
+		using RxBuf_t<N>::max_size;
+
 		MOS_INLINE inline void
 		wait() { sema.down(); }
 

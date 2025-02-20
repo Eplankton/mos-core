@@ -197,7 +197,7 @@ namespace MOS::Kernel::Sync
 		}
 
 		MOS_INLINE inline auto
-		proc(auto&& scope)
+		hold(auto&& scope)
 		{
 			lock();
 			scope();
@@ -246,7 +246,7 @@ namespace MOS::Kernel::Sync
 	{
 		using Raw_t    = T;
 		using RawRef_t = Raw_t&;
-		using MutexImpl_t::proc;
+		using MutexImpl_t::hold;
 
 		struct MutexGuard_t
 		{
@@ -283,7 +283,7 @@ namespace MOS::Kernel::Sync
 	template <>
 	struct Mutex_t<> : private MutexImpl_t
 	{
-		using MutexImpl_t::proc;
+		using MutexImpl_t::hold;
 
 		struct MutexGuard_t
 		{
@@ -385,7 +385,7 @@ namespace MOS::Kernel::Sync
 
 		inline void wait()
 		{
-			mtx.proc([&] {
+			mtx.hold([&] {
 				cnt += 1;
 				cv.wait(mtx, [&] { return cnt == total; });
 				if (!cv.has_waiters()) {

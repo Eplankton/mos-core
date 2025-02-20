@@ -108,8 +108,8 @@ namespace MOS::Shell
 		block_cmd(Argv_t argv)
 		{
 			task_ctrl_cmd(
-			    argv, 
-				[](auto tcb) {
+			    argv,
+			    [](auto tcb) {
 				    LOG("Task '%s' blocked", tcb->get_name());
 				    Task::block(tcb);
 			    },
@@ -137,7 +137,7 @@ namespace MOS::Shell
 			    " A_A       _  Version @ %s\n"
 			    "o'' )_____//  Build   @ %s, %s\n"
 			    " `_/  MOS  )  Chip    @ %s, %s\n"
-			    " (_(_/--(_/   2023-2024 Copyright by Eplankton\n",
+			    " (_(_/--(_/   2023-2025 Copyright by Eplankton\n",
 			    MOS_VERSION,
 			    __TIME__, __DATE__,
 			    MOS_MCU, MOS_ARCH
@@ -154,7 +154,6 @@ namespace MOS::Shell
 		static inline void
 		help_cmd(Argv_t argv);
 
-		// Add more commands to here by {"text", callback}
 		static constexpr Cmd_t sys_cmd_map[] = {
 		    {    "ls",     ls_cmd}, // List all tasks
 		    {  "kill",   kill_cmd}, // Kill a task
@@ -163,10 +162,11 @@ namespace MOS::Shell
 		    {  "help",   help_cmd}, // Show help info
 		    { "uname",  uname_cmd}, // Show system info
 		    {"reboot", reboot_cmd}, // Reboot system
+
+		    // Add more commands to here by {"text", callback}
 		};
 
-		using UsrCmdMap_t = Buffer_t<Cmd_t, Macro::SHELL_USR_CMD_SIZE>;
-		UsrCmdMap_t usr_cmd_map; // For user to register
+		auto usr_cmd_map = Buffer_t<Cmd_t, Macro::SHELL_USR_CMD_SIZE> {}; // For user to register
 
 		static inline void
 		help_cmd(Argv_t argv)
@@ -190,7 +190,8 @@ namespace MOS::Shell
 		CallBack::usr_cmd_map.push(cmd);
 	}
 
-	void launch(SyncRxBuf_t<SHELL_BUF_SIZE>& input)
+	template <size_t N>
+	void launch(SyncRxBuf_t<N>& input)
 	{
 		static auto parser = [](auto str) {
 			using CallBack::sys_cmd_map;
@@ -217,6 +218,7 @@ namespace MOS::Shell
 		CallBack::uname_cmd(nullptr);
 		Task::print_all();
 
+		// Wait -> Recv -> Parse -> Run -> Clear -> Wait -> ...
 		while (true) {
 			parser(input.recv().as_str());
 		}

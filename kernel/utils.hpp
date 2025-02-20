@@ -3,7 +3,7 @@
 
 #include "../config.h"
 #include "../arch/cpu.hpp"
-#include "../type.hpp"
+#include "./type.hpp"
 
 #define container_of(ptr, type, member) \
 	(type*) ((char*) ptr - offsetof(type, member))
