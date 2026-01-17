@@ -38,7 +38,7 @@ namespace MOS::Kernel::Task
 	}
 
 	MOS_INLINE inline void
-	dec_tmslc()
+	dec_tmslc() // Decrease Time Slice
 	{
 		// Avoid underflow
 		if (current()->time_slice <= TIME_SLICE)
@@ -51,7 +51,7 @@ namespace MOS::Kernel::Task
 	inc_ticks() { os_ticks += 1; }
 
 	MOS_INLINE inline Tid_t
-	tid_alloc()
+	tid_alloc() // Task ID Allocation
 	{
 		auto tid = tids.first_zero();
 		tids.set(tid);
@@ -143,13 +143,13 @@ namespace MOS::Kernel::Task
 		// clang-format off
 		template <typename Fn, typename Argv>
 		concept LambdaInvoke =
-		(LambdaArgvCheck<Fn, Argv> &&
-			requires(Fn fn, Argv argv) {
-				{ fn.operator()(argv) } -> Same<void>;
-		}) ||
-		requires(Fn fn) {
-			{ fn.operator()() } -> Same<void>;
-		};
+			(LambdaArgvCheck<Fn, Argv> &&
+				requires(Fn fn, Argv argv) {
+					{ fn.operator()(argv) } -> Same<void>;
+			}) ||
+				requires(Fn fn) {
+					{ fn.operator()() } -> Same<void>;
+			};
 		// clang-format on
 
 		template <typename Fn, typename Argv>

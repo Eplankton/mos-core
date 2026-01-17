@@ -369,15 +369,21 @@ namespace MOS::Kernel::Async
 		return CallbackAwaiter<T, CallbackFunc> {callback};
 	}
 
+	struct DelayAction
+	{
+		Tick_t ticks;
+
+		void operator()(std::coroutine_handle<> handle) const
+		{
+			// Delay the execution of the coroutine handle
+			delay_ms(ticks, handle);
+		}
+	};
+
 	// Delay a coroutine with ticks
 	Future_t<> delay(const Tick_t ticks)
 	{
-		co_return co_await callback_wrapper<void>(
-		    [ticks](std::coroutine_handle<> handle) {
-			    // Delay the execution of the coroutine handle
-			    delay_ms(ticks, handle);
-		    }
-		);
+		co_return co_await callback_wrapper<void>(DelayAction {ticks});
 	}
 }
 

@@ -61,7 +61,12 @@ namespace MOS::DataType
 		empty() const volatile { return m_len == 0; }
 
 		MOS_INLINE inline void
-		clear() volatile { m_head = m_tail = m_len = 0; }
+		clear() volatile
+		{
+			m_head = 0;
+			m_tail = 0;
+			m_len  = 0;
+		}
 	};
 
 	template <

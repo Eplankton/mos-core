@@ -1,8 +1,7 @@
 //////////////////////////////////////////////////////////////////////////
 //                          The MOS Shell                               //
-//                  Eplankton (wikechao@gmail.com)                      //
-//                   https://github.com/Eplankton                       //
-//               East China Normal University, Shanghai                 //
+//               https://github.com/Eplankton/mos-core                  //
+//              Old Salt Harbour Electric Industry Group                //
 //                  The Apache License, Version 2.0                     //
 //////////////////////////////////////////////////////////////////////////
 
@@ -137,7 +136,7 @@ namespace MOS::Shell
 			    " A_A       _  Version @ %s\n"
 			    "o'' )_____//  Build   @ %s, %s\n"
 			    " `_/  MOS  )  Chip    @ %s, %s\n"
-			    " (_(_/--(_/   2023-2025 Copyright by Eplankton\n",
+			    " (_(_/--(_/   2023-2026 Copyright by Eplankton\n",
 			    MOS_VERSION,
 			    __TIME__, __DATE__,
 			    MOS_MCU, MOS_ARCH
@@ -166,7 +165,8 @@ namespace MOS::Shell
 		    // Add more commands to here by {"text", callback}
 		};
 
-		auto usr_cmd_map = Buffer_t<Cmd_t, Macro::SHELL_USR_CMD_SIZE> {}; // For user to register
+		// Register services
+		static Buffer_t<Cmd_t, Macro::SHELL_USR_CMD_SIZE> usr_cmd_map;
 
 		static inline void
 		help_cmd(Argv_t argv)

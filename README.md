@@ -40,6 +40,8 @@
 └── shell.hpp           // Command line
 ```
 
+---
+
 <p align="center">
 <img src="pic/osh-zh-en.svg">
 </p>

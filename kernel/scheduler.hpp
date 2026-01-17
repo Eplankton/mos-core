@@ -118,6 +118,7 @@ namespace MOS::Kernel::Scheduler
 	{
 		static uint32_t ipb[PAGE_SIZE / 2]; // Idle Page Block
 
+		// Memory space allocated to the idle task
 		Page_t idle_page {
 		    .policy = Page_t::Policy::STATIC,
 		    .raw    = ipb,
@@ -129,19 +130,23 @@ namespace MOS::Kernel::Scheduler
 			while (true) { // Recycle resources
 				Task::recycle();
 			}
+
+			// while (true) { // Wait for Interrupt
+			// 	__WFI();
+			// }
 		};
 
-		Task::create( // Create idle task with a hook fn, or just the default
+		Task::create( // Create the idle task with a selected hook fn, or just as default
 		    hook ? hook : idle,
 		    nullptr, PRI_MIN, "idle", idle_page
 		);
 
-		MOS_ASSERT(!ready_list.empty(), "Launch Failed!");
+		MOS_ASSERT(!ready_list.empty(), "OS Launch Failed!");
 
-		cur_tcb = ready_list.begin();
-		cur_tcb->set_status(RUNNING);
-		sched_status = Status::Ok;
-		init();
+		cur_tcb = ready_list.begin(); // Point to the first task
+		cur_tcb->set_status(RUNNING); // Setup running status
+		sched_status = Status::Ok;    // Enable Scheduling
+		init();                       // Jump to Scheduler
 	}
 
 	template <Policy policy>

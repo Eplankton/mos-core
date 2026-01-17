@@ -46,10 +46,11 @@ mos_assert_failed(void* file, uint32_t line, void* func, const char* msg)
 namespace MOS::Utils
 {
 	MOS_INLINE inline void
-	portable_delay(volatile uint32_t n)
+	portable_delay(uint32_t n)
 	{
-		while (n--) {
+		while (n > 0) {
 			MOS_NOP();
+			n = n - 1;
 		}
 	}
 
@@ -131,8 +132,8 @@ namespace MOS::Utils
 
 		struct Iter_t
 		{
-			const Raw_t step;
 			Raw_t raw;
+			const Raw_t step;
 
 			MOS_INLINE
 			inline Iter_t(Raw_t _raw, Raw_t _step)
@@ -206,13 +207,13 @@ namespace MOS::Utils
 }
 
 MOS_INLINE inline constexpr uint32_t
-operator"" _ms(uint64_t raw) noexcept
+operator""_ms(uint64_t raw) noexcept
 {
 	return raw * MOS_CONF_SYSTICK / 1000;
 }
 
 MOS_INLINE inline constexpr uint32_t
-operator"" _s(uint64_t raw) noexcept
+operator""_s(uint64_t raw) noexcept
 {
 	return raw * MOS_CONF_SYSTICK;
 }

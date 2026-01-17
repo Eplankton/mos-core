@@ -1,8 +1,7 @@
 //////////////////////////////////////////////////////////////////////////
 //                          The MOS Kernel                              //
-//                  Eplankton (wikechao@gmail.com)                      //
-//                   https://github.com/Eplankton                       //
-//               East China Normal University, Shanghai                 //
+//               https://github.com/Eplankton/mos-core                  //
+//              Old Salt Harbour Electric Industry Group                //
 //                  The Apache License, Version 2.0                     //
 //////////////////////////////////////////////////////////////////////////
 

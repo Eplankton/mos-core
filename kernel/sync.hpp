@@ -80,7 +80,7 @@ namespace MOS::Kernel::Sync
 		TcbPtr_t owner;
 
 		MOS_INLINE
-		inline Lock_t(): owner(nullptr), sema(1) {}
+		inline Lock_t(): sema(1), owner(nullptr) {}
 
 		MOS_INLINE inline void
 		acquire()

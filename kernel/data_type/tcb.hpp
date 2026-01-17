@@ -52,7 +52,7 @@ namespace MOS::DataType
 		       stamp      = -1;
 
 		Prior_t pri     = PRI_MIN,
-		        old_pri = PRI_NONE;
+		        sub_pri = PRI_INV;
 
 		// For events like Send/Recv/...
 		Node_t event;
@@ -66,8 +66,8 @@ namespace MOS::DataType
 		TCB_t(
 		    Fn_t fn, Argv_t argv, Prior_t pri,
 		    Name_t name, Page_t page
-		): fn(fn), argv(argv), pri(pri),
-		   name(name), page(page) {}
+		): page(page), pri(pri), fn(fn),
+		   argv(argv), name(name) {}
 
 		MOS_INLINE inline TcbPtr_t
 		next() const volatile
@@ -157,8 +157,8 @@ namespace MOS::DataType
 		MOS_INLINE inline void // Used in Mutex
 		store_pri(Prior_t new_pri) volatile
 		{
-			if (old_pri == PRI_NONE) {
-				old_pri = pri;
+			if (sub_pri == PRI_INV) {
+				sub_pri = pri;
 				set_pri(new_pri);
 			}
 		}
@@ -166,9 +166,9 @@ namespace MOS::DataType
 		MOS_INLINE inline void // Used in Mutex
 		restore_pri() volatile
 		{
-			if (old_pri != PRI_NONE) {
-				set_pri(old_pri);
-				old_pri = PRI_NONE;
+			if (sub_pri != PRI_INV) {
+				set_pri(sub_pri);
+				sub_pri = PRI_INV;
 			}
 		}
 
@@ -396,10 +396,10 @@ namespace MOS::DataType
 
 	struct DebugTcbs_t
 	{
-		using TcbPtr_t = volatile TCB_t::TcbPtr_t;
-		using Raw_t    = volatile TcbPtr_t[MAX_TASK_NUM];
-		using Len_t    = volatile uint32_t;
-		using Tid_t    = volatile TCB_t::Tid_t;
+		using TcbPtr_t = TCB_t::TcbPtr_t;
+		using Raw_t    = TcbPtr_t[MAX_TASK_NUM];
+		using Len_t    = uint32_t;
+		using Tid_t    = TCB_t::Tid_t;
 
 		Raw_t raw = {nullptr};
 		Len_t len = 0;
