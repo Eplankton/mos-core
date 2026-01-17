@@ -1,6 +1,6 @@
 /*
  * syscalls.c
- * Implementation of newlib system call stubs for embedded ARM (e.g. STM32/Renode)
+ * Implementation of newlib system call stubs for embedded ARM (e.g., STM32/Renode)
  */
 
 #include <sys/stat.h>
@@ -10,32 +10,36 @@
 #undef errno
 extern int errno;
 
-/* * 环境变量指针 
- * 这是 newlib 需要的一个全局变量
+/* 
+ * Environment variable pointer.
+ * This is a global variable required by newlib.
  */
 char *__env[1] = { 0 };
 char **environ = __env;
 
-/* * 1. _exit: 退出程序
- * 在嵌入式中通常死循环或复位
+/* 
+ * 1. _exit: Terminate program.
+ * In embedded systems, typically implement an infinite loop or reset.
  */
 void _exit(int status) {
-    (void)status; // 防止未使用参数警告
+    (void)status; // Suppress unused parameter warning
     while (1) {
-        // 这里可以添加复位代码，例如 NVIC_SystemReset();
+        // Add reset code here if needed, e.g., NVIC_SystemReset();
     }
 }
 
-/* * 2. _close: 关闭文件
- * 嵌入式通常没有文件系统，直接返回 -1
+/* 
+ * 2. _close: Close a file.
+ * In embedded systems without a file system, simply return -1.
  */
 int _close(int file) {
     (void)file;
     return -1;
 }
 
-/* * 3. _fstat: 获取文件状态
- * 声明输出流为字符设备（让 printf 不带缓冲）
+/* 
+ * 3. _fstat: Get file status.
+ * Declare output streams as character devices (to make printf unbuffered).
  */
 int _fstat(int file, struct stat *st) {
     (void)file;
@@ -43,23 +47,26 @@ int _fstat(int file, struct stat *st) {
     return 0;
 }
 
-/* * 4. _getpid: 获取进程 ID
- * 单进程环境，返回 1
+/* 
+ * 4. _getpid: Get process ID.
+ * In a single-process environment, return 1.
  */
 int _getpid(void) {
     return 1;
 }
 
-/* * 5. _isatty: 判断是否为终端
- * 返回 1 表示是交互式终端
+/* 
+ * 5. _isatty: Check if a file descriptor refers to a terminal.
+ * Return 1 to indicate it's an interactive terminal.
  */
 int _isatty(int file) {
     (void)file;
     return 1;
 }
 
-/* * 6. _kill: 发送信号
- * 不支持信号，返回错误
+/* 
+ * 6. _kill: Send a signal to a process.
+ * Not supported in this environment; return an error.
  */
 int _kill(int pid, int sig) {
     (void)pid;
@@ -68,8 +75,9 @@ int _kill(int pid, int sig) {
     return -1;
 }
 
-/* * 7. _lseek: 文件定位
- * 不支持，返回 0
+/* 
+ * 7. _lseek: Reposition file offset.
+ * Not supported; return 0.
  */
 int _lseek(int file, int ptr, int dir) {
     (void)file;
@@ -78,8 +86,9 @@ int _lseek(int file, int ptr, int dir) {
     return 0;
 }
 
-/* * 8. _read: 读输入
- * 如果你有串口接收，可以在这里实现
+/* 
+ * 8. _read: Read from a file.
+ * If you have UART reception, implement it here.
  */
 int _read(int file, char *ptr, int len) {
     (void)file;
@@ -88,39 +97,41 @@ int _read(int file, char *ptr, int len) {
     return 0; // EOF
 }
 
-/* * 9. _write: 写输出 (关键!)
- * 这是 printf 的底层实现。
- * 你需要根据你的硬件（如 UART）修改这里的逻辑。
+/* 
+ * 9. _write: Write to a file (CRITICAL!).
+ * This is the underlying implementation for printf.
+ * Modify the logic here according to your hardware (e.g., UART).
  */
 int _write(int file, char *ptr, int len) {
     (void)file;
     int i;
     for (i = 0; i < len; i++) {
-        // 如果你有 UART 发送函数，取消下面的注释并调用它
+        // If you have a UART send function, uncomment below and call it
         // __io_putchar(ptr[i]); 
-        // 或者: UART_SendChar(ptr[i]);
+        // or: UART_SendChar(ptr[i]);
     }
     return len;
 }
 
-/* * 10. _sbrk: 堆内存分配 (malloc 需要)
- * 如果你用到了 new/malloc，这个函数必须正确实现
+/* 
+ * 10. _sbrk: Heap memory allocation (required for malloc).
+ * This function must be correctly implemented if new/malloc are used.
  */
-extern char _end; // Linker script 中定义的堆起始地址 (通常是 .bss 之后)
+extern char _end; // Heap start address defined in linker script (typically after .bss)
 static char *heap_end = 0;
 
 caddr_t _sbrk(int incr) {
     char *prev_heap_end;
     
-    // 初始化 heap_end
+    // Initialize heap_end
     if (heap_end == 0) {
         heap_end = &_end;
     }
 
     prev_heap_end = heap_end;
     
-    // 检查堆是否会通过栈 (这里只是简单增加，建议加上堆栈碰撞检测)
-    // 简单的检测：
+    // Check if heap would collide with stack (simple increment; stack collision detection is recommended)
+    // Simple detection example:
     // char * stack_ptr;
     // __asm volatile ("mov %0, sp" : "=r" (stack_ptr));
     // if (heap_end + incr > stack_ptr) { ... error ... }
