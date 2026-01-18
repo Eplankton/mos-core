@@ -15,7 +15,11 @@ namespace MOS::DataType
 		SelfPtr_t prev = this, next = this;
 
 		MOS_INLINE inline void
-		deinit() volatile { new ((void*) this) Self_t {}; }
+		deinit() volatile
+		{
+			prev = (SelfPtr_t) this;
+			next = (SelfPtr_t) this;
+		}
 	};
 
 	namespace // private cmp checker
@@ -32,6 +36,7 @@ namespace MOS::DataType
 		concept NodeCmpFn = Invocable<Fn, bool, const ListNode_t&, const ListNode_t&>;
 	}
 
+	// If involves multi-core or interrupt context, ensure hold locks.
 	using List_t = struct ListImpl_t
 	{
 		using Self_t         = ListImpl_t;

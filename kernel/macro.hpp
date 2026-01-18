@@ -18,6 +18,8 @@ namespace MOS::Macro
 	constexpr uint32_t SHELL_USR_CMD_SIZE = MOS_CONF_SHELL_USR_CMD_SIZE;
 	constexpr uint32_t ASYNC_TASK_MAX     = MOS_CONF_ASYNC_TASK_MAX;
 	constexpr uint32_t ASYNC_TASK_SIZE    = MOS_CONF_ASYNC_TASK_SIZE;
+	constexpr uint32_t ASYNC_POOL_MAX     = MOS_CONF_ASYNC_POOL_MAX;
+	constexpr uint32_t ASYNC_FRAME_SIZE   = MOS_CONF_ASYNC_FRAME_SIZE;
 }
 
 #endif

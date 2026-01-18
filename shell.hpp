@@ -218,7 +218,7 @@ namespace MOS::Shell
 		CallBack::uname_cmd(nullptr);
 		Task::print_all();
 
-		// Wait -> Recv -> Parse -> Run -> Clear -> Wait -> ...
+		// Wait -> Recv -> Parse -> Run -> Clear -> Wait
 		while (true) {
 			parser(input.recv().as_str());
 		}
