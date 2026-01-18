@@ -16,6 +16,8 @@ namespace MOS::Macro
 	constexpr int8_t PRI_MIN              = MOS_CONF_PRI_MIN;
 	constexpr uint32_t SHELL_BUF_SIZE     = MOS_CONF_SHELL_BUF_SIZE;
 	constexpr uint32_t SHELL_USR_CMD_SIZE = MOS_CONF_SHELL_USR_CMD_SIZE;
+	constexpr uint32_t ASYNC_TASK_MAX     = MOS_CONF_ASYNC_TASK_MAX;
+	constexpr uint32_t ASYNC_TASK_SIZE    = MOS_CONF_ASYNC_TASK_SIZE;
 }
 
 #endif

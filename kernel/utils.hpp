@@ -19,11 +19,11 @@
 #include "printf.h"
 #define MOS_PUTCHAR       _putchar
 #define kprintf(fmt, ...) printf_(fmt, ##__VA_ARGS__)
-#define LOG(fmt, ...) kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
+#define LOG(fmt, ...)     kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
 #else
 #define MOS_PUTCHAR       ((void) 0)
 #define kprintf(fmt, ...) ((void) 0)
-#define LOG(fmt, ...) ((void) 0)
+#define LOG(fmt, ...)     ((void) 0)
 #endif
 
 #if (MOS_CONF_ASSERT)
@@ -104,20 +104,28 @@ namespace MOS::Utils
 	inline void*
 	memcpy(void* dest, const void* src, size_t n)
 	{
-		for (size_t i = 0; i < n; i++) {
-			((uint8_t*) dest)[i] = ((const uint8_t*) src)[i];
-		}
-		return dest;
+	#if defined(__GNUC__) || defined(__msvc__)
+		return __builtin_memcpy(dest, src, n); // Use Bulitin Memcpy
+	#else
+		// 	for (size_t i = 0; i < n; i++) {
+		// 		((uint8_t*) dest)[i] = ((const uint8_t*) src)[i];
+		// 	}
+		// 	return dest;
+	#endif
 	}
 
 	inline void*
 	memset(void* ptr, uint8_t value, size_t n)
 	{
+	#if defined(__GNUC__) || defined(__msvc__)
+		return __builtin_memset(ptr, value, n); // Use Bulitin Memset
+	#else
 		auto raw = (uint8_t*) ptr;
 		for (size_t i = 0; i < n; i++) {
 			raw[i] = value;
 		}
 		return ptr;
+	#endif
 	}
 
 	struct Range

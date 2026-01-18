@@ -1,18 +1,24 @@
-<p align="center">
+<h3 align="center">
 <img src="pic/mos_logo.svg">
-</p>
 
-# MOS Core
+<a href="https://github.com/Eplankton/mos-stm32/stargazers"><img src="https://img.shields.io/github/stars/Eplankton/mos-stm32?colorA=363a4f&colorB=b7bdf8&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-stm32/network/members"><img src="https://img.shields.io/github/forks/Eplankton/mos-stm32?colorA=363a4f&colorB=c6a0f6&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-stm32/contributors"><img src="https://img.shields.io/github/contributors/Eplankton/mos-stm32?colorA=363a4f&colorB=a6da95&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-renode/commits"><img src="https://img.shields.io/github/last-commit/Eplankton/mos-renode?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
 
-### About 🦉
+<a href="https://github.com/Eplankton/mos-stm32/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Eplankton/mos-stm32?colorA=363a4f&colorB=ed8796&style=for-the-badge"></a>
+
+</h3>
+
+## About 🦉
 -  **[English](https://github.com/Eplankton/mos-core) | [中文](https://gitee.com/Eplankton/mos-core)**
 
 **MOS** is a Real-Time Operating System (RTOS) project consists of a preemptive kernel and a command-line shell(both in C++) with application components(e.g., **GuiLite** and **FatFS**).
 
-### Repository 📦
+## Repository 📦
 - **[GitHub(English)](https://github.com/Eplankton/mos-core) | [Gitee(中文)](https://gitee.com/Eplankton/mos-core)**
 
-### Architecture 🏀
+## Architecture 🏀
 <img src="pic/mos_arch.svg">
 
 ```

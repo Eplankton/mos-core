@@ -1,18 +1,25 @@
-<p align="center">
+<h3 align="center">
 <img src="pic/mos_logo.svg">
-</p>
 
-# MOS Core
+<a href="https://github.com/Eplankton/mos-stm32/stargazers"><img src="https://img.shields.io/github/stars/Eplankton/mos-stm32?colorA=363a4f&colorB=b7bdf8&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-stm32/network/members"><img src="https://img.shields.io/github/forks/Eplankton/mos-stm32?colorA=363a4f&colorB=c6a0f6&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-stm32/contributors"><img src="https://img.shields.io/github/contributors/Eplankton/mos-stm32?colorA=363a4f&colorB=a6da95&style=for-the-badge"></a>
+<a href="https://github.com/Eplankton/mos-renode/commits"><img src="https://img.shields.io/github/last-commit/Eplankton/mos-renode?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
 
-### 介绍 🦉
--  **[中文](https://gitee.com/Eplankton/mos-core) | [English](https://github.com/Eplankton/mos-core)**
+<a href="https://github.com/Eplankton/mos-stm32/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Eplankton/mos-stm32?colorA=363a4f&colorB=ed8796&style=for-the-badge"></a>
 
-**MOS** 是一个实时操作系统（RTOS）项目，包含一个抢占式内核和简易命令行(使用C++编写), 并移植了一些应用层组件(例如，**GuiLite** 和 **FatFS**)。
+</h3>
 
-### 仓库 📦
+
+## 介绍 🦉
+**[中文](https://gitee.com/Eplankton/mos-core) | [English](https://github.com/Eplankton/mos-core)**
+
+- **MOS** 是一个用 C++ 编写的实时操作系统 (Real-Time Operating System, RTOS) 项目，包含一个抢占式内核和简易命令行, 并移植了一些应用层组件 (例如：**GuiLite** 和 **FatFS** 等)。
+
+## 仓库 📦
 - **[Gitee(中文)](https://gitee.com/Eplankton/mos-core) | [GitHub(English)](https://github.com/Eplankton/mos-core)**
 
-### 架构 🏀
+## 架构 🏀
 <img src="pic/mos_arch.svg">
 
 ```
@@ -21,6 +28,7 @@
 ├── 📁 arch              // 架构相关
 │   └── cpu.hpp          // 初始化/上下文切换
 │
+├── 📁 external          // 外部库
 ├── 📁 kernel            // 内核代码
 │   ├── macro.hpp        // 常量宏
 │   ├── type.hpp         // 基础类型

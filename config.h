@@ -22,5 +22,7 @@
 #define MOS_CONF_SCHED_POLICY       PreemptPri // Scheduler Policy: RoundRobin, PreemptPri
 #define MOS_CONF_SHELL_BUF_SIZE     32         // Shell I/O Buffer Size
 #define MOS_CONF_SHELL_USR_CMD_SIZE 8          // Shell User Cmds Size
+#define MOS_CONF_ASYNC_TASK_MAX     256        // Max Async Tasks Number
+#define MOS_CONF_ASYNC_TASK_SIZE    32         // Lambda Captured Object Bytes
 
 #endif

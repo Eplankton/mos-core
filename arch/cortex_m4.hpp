@@ -5,7 +5,7 @@
 #include "core_cm4.h"
 
 #define MOS_REBOOT()              NVIC_SystemReset()
-#define MOS_TRIGGER_SVC_INTR()    asm volatile("svc    0")
+#define MOS_TRIGGER_SVC_INTR()    asm volatile("svc 0")
 #define MOS_TRIGGER_PENDSV_INTR() SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk
 #define MOS_SVC_HANDLER           SVC_Handler
 #define MOS_PENDSV_HANDLER        PendSV_Handler

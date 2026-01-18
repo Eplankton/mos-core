@@ -1,10 +1,12 @@
 #ifndef _MOS_ASYNC_
 #define _MOS_ASYNC_
 
-#include <map>
-#include <vector>
+// Import ETL Library
+#include "etl/vector.h"
+#include "etl/multimap.h"
+
+// Use C++'s Coroutine Infra
 #include <coroutine>
-#include <functional>
 
 #include "task.hpp"
 #include "utils.hpp"
@@ -13,375 +15,412 @@ namespace MOS::Kernel::Async
 {
 	using Global::os_ticks;
 	using Tick_t = Task::Tick_t;
-	using lambda = std::function<void()>;
 
-	// Responsible for managing and executing coroutines
-	struct Executor
+	// ==========================================================
+	// Custom FixedFunction
+	// Replaces std::function, stores Lambda in a fixed buffer.
+	// Supports Copy/Move semantics, compatible with ETL containers.
+	// ==========================================================
+	template <size_t MAX_SIZE>
+	class FixedFunction
 	{
-		// Poll the executor for once
-		void poll()
+	public:
+		using Invoker_t = void (*)(void*);
+		using Cloner_t  = void (*)(void* dest, const void* src);
+
+		// Default Constructor
+		FixedFunction(): invoker(nullptr), cloner(nullptr) {}
+
+		// Construct from Lambda or Functor
+		template <typename F>
+		FixedFunction(F f)
 		{
-			clean_sleepers();
-			auto run_list = std::move(ready_tasks);
-			for (auto& task: run_list) {
-				task();
-			}
-		}
+			static_assert(sizeof(F) <= MAX_SIZE, "Lambda too large for FixedFunction buffer!");
 
-		// Post a task to the executor
-		void post(lambda fn)
-		{
-			ready_tasks.push_back(std::move(fn));
-		}
+			// Construct object in buffer
+			new (buffer) F(std::move(f));
 
-		// Get the static instance of the executor
-		static auto& get_executor()
-		{
-			static Executor exector; // static instance for Executor
-
-			static bool spawn = []() {
-				// Continuously polls the executor until empty
-				static auto Waker = [] {
-					while (true) {
-						exector.poll();
-					}
-				};
-
-				// Create a Waker for polling, which can be extended
-				return nullptr != Task::create(Waker, nullptr, Macro::PRI_MIN, "async/exec");
-			}();
-
-			MOS_ASSERT(spawn, "Spawn Failed!");
-			return exector;
-		}
-
-		// Delay with a callback
-		MOS_INLINE inline void
-		add_sleeper(uint32_t ms, lambda fn)
-		{
-			sleepers.insert({os_ticks + ms, fn});
-		}
-
-		void clean_sleepers()
-		{
-			auto try_wake_up = [this](auto it) {
-				auto old_it = it;
-				it++;
-				ready_tasks.push_back(std::move(old_it->second));
-				sleepers.erase(old_it);
-				return it;
+			// Set Invoker (Type Erasure)
+			invoker = [](void* data) {
+				(*reinterpret_cast<F*>(data))();
 			};
 
-			Utils::IrqGuard_t guard;
+			// Set Cloner (For Copy Construction)
+			cloner = [](void* dest, const void* src) {
+				new (dest) F(*reinterpret_cast<const F*>(src));
+			};
+		}
 
-			// Get the current tick count
-			auto now = os_ticks;
-			// Iterate through the sleepers multimap
-			for (auto it = sleepers.begin(); it != sleepers.end();) {
-				if (now >= it->first) {
-					// Check if the time is hit
-					if ((now - it->first) < UINT32_MAX) {
-						it = try_wake_up(it);
-						continue;
-					}
-				}
-				else if (now < it->first) {
-					if ((now - it->first) < UINT32_MAX) {
-						it = try_wake_up(it);
-						continue;
-					}
-				}
-				it++;
+		// Copy Constructor
+		FixedFunction(const FixedFunction& other)
+		{
+			copy_from(other);
+		}
+
+		// Move Constructor
+		FixedFunction(FixedFunction&& other) noexcept
+		{
+			move_from(std::move(other));
+		}
+
+		// Copy Assignment
+		FixedFunction& operator=(const FixedFunction& other)
+		{
+			if (this != &other) {
+				copy_from(other);
 			}
+			return *this;
+		}
+
+		// Move Assignment
+		FixedFunction& operator=(FixedFunction&& other) noexcept
+		{
+			if (this != &other) {
+				move_from(std::move(other));
+			}
+			return *this;
+		}
+
+		// Check if callable
+		explicit operator bool() const { return invoker != nullptr; }
+
+		// Invoke
+		void operator()()
+		{
+			if (invoker) invoker(buffer);
 		}
 
 	private:
-		std::vector<lambda> ready_tasks;
-		std::multimap<uint32_t, lambda> sleepers;
+		alignas(void*) char buffer[MAX_SIZE]; // Static storage
+		Invoker_t invoker;
+		Cloner_t cloner;
+
+		void copy_from(const FixedFunction& other)
+		{
+			if (other.invoker) {
+				other.cloner(buffer, other.buffer);
+				invoker = other.invoker;
+				cloner  = other.cloner;
+			}
+			else {
+				invoker = nullptr;
+				cloner  = nullptr;
+			}
+		}
+
+		void move_from(FixedFunction&& other)
+		{
+			if (other.invoker) {
+				Utils::memcpy(buffer, other.buffer, MAX_SIZE);
+				invoker       = other.invoker;
+				cloner        = other.cloner;
+				other.invoker = nullptr;
+				other.cloner  = nullptr;
+			}
+			else {
+				invoker = nullptr;
+				cloner  = nullptr;
+			}
+		}
 	};
 
-	// Post a task to the executor
-	MOS_INLINE static inline void
-	post(lambda fn)
+	// Generic Lambda type for Async module
+	using Lambda_t = FixedFunction<Macro::ASYNC_TASK_SIZE>;
+
+	// ==========================================================
+	// Executor Implementation
+	// ==========================================================
+	struct Executor
 	{
-		Executor::get_executor().post(std::move(fn));
+		// Poll the executor once
+		void poll()
+		{
+			clean_sleepers();
+
+			if (ready_tasks.empty()) {
+				return;
+			}
+
+			// Move tasks to run_list to allow re-entry/posting during execution
+			run_list = std::move(ready_tasks);
+			ready_tasks.clear();
+
+			for (auto& task: run_list) {
+				if (task) {
+					task();
+				}
+			}
+
+			run_list.clear();
+		}
+
+		// Post a task to the executor
+		void post(Lambda_t fn)
+		{
+			if (!ready_tasks.full()) {
+				ready_tasks.push_back(std::move(fn));
+			}
+			else {
+				MOS_ASSERT(false, "Async Queue Full!");
+			}
+		}
+
+		// Delay with a callback
+		// Removed MOS_INLINE to let compiler decide
+		void add_sleeper(uint32_t ms, Lambda_t fn)
+		{
+			if (!sleepers.full()) {
+				sleepers.insert({os_ticks + ms, std::move(fn)});
+			}
+			else {
+				MOS_ASSERT(false, "Async Sleeper Full!");
+			}
+		}
+
+		// Get a static instance, init only once
+		static Executor& get()
+		{
+			static Executor executor;
+			static bool initialized = false;
+
+			if (!initialized) {
+				// Create a background waker task
+				auto waker_routine = [] {
+					while (true) {
+						executor.poll();
+					}
+				};
+
+				// Create async-exec only once
+				if (Task::create(waker_routine, nullptr, Macro::PRI_MIN, "async/exec")) {
+					initialized = true;
+				}
+				else {
+					MOS_ASSERT(false, "Async Spawn Failed!");
+				}
+			}
+			return executor;
+		}
+
+	private:
+		// Check sleepers and wake up due tasks
+		void clean_sleepers()
+		{
+			Utils::IrqGuard_t guard;
+			const auto now = os_ticks;
+
+			for (auto it = sleepers.begin(); it != sleepers.end();) {
+				// Use signed arithmetic for correct wrap-around handling
+				if (static_cast<int32_t>(now - it->first) >= 0) {
+					if (!ready_tasks.full()) {
+						ready_tasks.push_back(std::move(it->second));
+					}
+					it = sleepers.erase(it);
+				}
+				else {
+					++it;
+				}
+			}
+		}
+
+		using TaskBuffer_t  = etl::vector<Lambda_t, Macro::ASYNC_TASK_MAX>;
+		using SleepBuffer_t = etl::multimap<uint32_t, Lambda_t, Macro::ASYNC_TASK_MAX>;
+
+		// Double buffering
+		TaskBuffer_t ready_tasks, run_list;
+		SleepBuffer_t sleepers;
+	};
+
+	// ==========================================================
+	// Public API
+	// Changed: 'MOS_INLINE static' -> 'inline'
+	// ==========================================================
+	inline void post(Lambda_t fn)
+	{
+		Executor::get().post(std::move(fn));
 	}
 
-	// Delay with a callback
-	MOS_INLINE static inline void
-	delay_ms(const uint32_t ms, lambda fn)
+	inline void delay_ms(const uint32_t ms, Lambda_t fn)
 	{
-		Executor::get_executor().add_sleeper(ms, fn);
+		Executor::get().add_sleeper(ms, std::move(fn));
 	}
 
-	// Yield to give out
-	MOS_INLINE static inline void
-	yield(lambda fn)
+	inline void yield(Lambda_t fn)
 	{
-		Executor::get_executor().post(fn);
+		Executor::get().post(std::move(fn));
 	}
 
+	// ==========================================================
+	// Coroutine Infrastructure
+	// ==========================================================
 	template <typename T>
 	struct Future_t;
-
 	template <typename T>
 	struct Promise_t;
-
-	template <typename T, typename CallbackFunction>
-	struct CallbackAwaiter;
 
 	template <typename T>
 	struct PromiseRet_t
 	{
-		template <typename Type>
-		MOS_INLINE inline void
-		return_value(Type&& val) noexcept
-		{
-			value = val;
-		}
-
-		MOS_INLINE inline void unhandled_exception() noexcept {}
-		MOS_INLINE inline T get_value() const { return value; }
-
-	private:
 		T value;
+		template <typename U>
+		void return_value(U&& val) noexcept
+		{
+			value = std::forward<U>(val);
+		}
+		T get_value() const { return value; }
 	};
 
 	template <>
 	struct PromiseRet_t<void>
 	{
-		MOS_INLINE inline constexpr void return_void() noexcept {}
-		MOS_INLINE inline constexpr void unhandled_exception() noexcept {}
-		MOS_INLINE inline constexpr void get_value() const {}
+		void return_void() noexcept {}
+		void get_value() const {}
 	};
 
 	template <typename T>
 	struct FutureFinal_t
 	{
-		using PromiseType   = Promise_t<T>;
-		using PromiseHandle = std::coroutine_handle<PromiseType>;
-
-		// Pointer to the source promise
-		PromiseType* source;
-
-		// Resume the await operation and get the value from the promise
-		MOS_INLINE inline constexpr void
-		await_resume() noexcept
+		Promise_t<T>* source;
+		bool await_ready() noexcept { return !source->next; }
+		void await_resume() noexcept { source->get_value(); }
+		auto await_suspend(std::coroutine_handle<Promise_t<T>> h) noexcept
 		{
-			// If the coroutine is detached and not co_awaited, rethrow the exception
-			source->get_value();
-		}
-
-		// Check if the await operation is ready
-		MOS_INLINE inline bool
-		await_ready() noexcept
-		{
-			// If next is not empty, return it to wake up the waiting coroutine
-			// If next is empty, indicate that the coroutine is the last in the chain
-			return !source->next;
-		}
-
-		// Suspend the coroutine and return the next coroutine handle
-		MOS_INLINE inline auto
-		await_suspend(PromiseHandle handle) noexcept
-		{
-			return handle.promise().next;
+			return h.promise().next;
 		}
 	};
 
-	// Promise type implementation
 	template <typename T>
 	struct Promise_t : public PromiseRet_t<T>
 	{
-		// Get the return object (future) for the promise
-		Future_t<T> get_return_object()
-		{
-			auto ret = Future_t<T> {std::coroutine_handle<Promise_t<T>>::from_promise(*this)};
-			return ret;
-		}
-
-		// Final suspension point of the coroutine
-		MOS_INLINE inline auto
-		final_suspend() noexcept
-		{
-			return FutureFinal_t<T> {this};
-		}
-
-		// Initial suspension point of the coroutine
-		MOS_INLINE inline auto
-		initial_suspend()
-		{
-			return std::suspend_always {};
-		}
-
-		// The next coroutine handle to resume after this one is done
 		std::coroutine_handle<> next;
+
+		Future_t<T> get_return_object();
+
+		auto initial_suspend() { return std::suspend_always {}; }
+		auto final_suspend() noexcept { return FutureFinal_t<T> {this}; }
+		void unhandled_exception() noexcept {}
 	};
 
-	// Coroutine awaitable wrapper
 	template <typename T = void>
 	struct Future_t
 	{
-		using promise_type  = Promise_t<T>;
-		using PromiseHandle = std::coroutine_handle<promise_type>;
+		using promise_type = Promise_t<T>;
+		std::coroutine_handle<promise_type> handle;
 
-		// The current coroutine handle
-		PromiseHandle current_handle;
+		explicit Future_t(std::coroutine_handle<promise_type> h): handle(h) {}
 
-		// Initialize the future with a coroutine handle
-		explicit Future_t(PromiseHandle handle): current_handle(handle) {}
-
-		Future_t(Future_t&& t) noexcept
-		    : current_handle(t.current_handle) { t.current_handle = nullptr; }
-
-		~Future_t()
-		{
-			if (current_handle) {
-				if (current_handle.done()) {
-					// Destroy the coroutine if it is done
-					current_handle.destroy();
-				}
-				else {
-					// Resume the coroutine if it is not done
-					current_handle.resume();
-				}
-			}
-		}
-
-		// Move assignment operator
+		Future_t(Future_t&& t) noexcept: handle(t.handle) { t.handle = nullptr; }
 		Future_t& operator=(Future_t&& t) noexcept
 		{
-			if (&t != this) {
-				if (current_handle) {
-					// Destroy the current coroutine handle
-					current_handle.destroy();
-				}
-				current_handle   = t.current_handle;
-				t.current_handle = nullptr;
+			if (this != &t) {
+				if (handle) handle.destroy();
+				handle   = t.handle;
+				t.handle = nullptr;
 			}
 			return *this;
 		}
 
 		Future_t(const Future_t&)            = delete;
-		Future_t(Future_t&)                  = delete;
 		Future_t& operator=(const Future_t&) = delete;
-		Future_t& operator=(Future_t&)       = delete;
 
-		// Check if the await operation is ready
-		MOS_INLINE inline constexpr bool
-		await_ready() const noexcept
+		~Future_t()
 		{
-			return false;
+			if (handle) {
+				if (handle.done()) handle.destroy();
+				else
+					handle.resume();
+			}
 		}
 
-		// Resume the await operation and get the value from the promise
-		MOS_INLINE inline T
-		await_resume() noexcept
+		bool await_ready() const noexcept { return false; }
+		T await_resume() noexcept { return handle.promise().get_value(); }
+
+		template <typename P>
+		auto await_suspend(std::coroutine_handle<P> next)
 		{
-			return current_handle.promise().get_value();
+			handle.promise().next = next;
+			return handle;
 		}
 
-		// Suspend the coroutine and set the next coroutine handle
-		template <typename PromiseType>
-		MOS_INLINE inline auto
-		await_suspend(std::coroutine_handle<PromiseType> next)
+		auto detach()
 		{
-			current_handle.promise().next = next;
-			return current_handle;
-		}
-
-		// Detach the future and launch the coroutine to free execution
-		MOS_INLINE inline auto
-		detach()
-		{
-			auto launched_coro = [](Future_t<T> lazy) mutable -> Future_t<T> {
+			return [](Future_t<T> lazy) mutable -> Future_t<T> {
 				co_return co_await std::move(lazy);
 			}(std::move(*this));
-
-			return launched_coro;
 		}
 	};
 
-	// Template deduction guide for Future_t
-	template <typename T = void>
+	template <typename T>
 	Future_t(T) -> Future_t<T>;
 
-	// Template struct for callback awaiter
+	template <typename T>
+	Future_t<T> Promise_t<T>::get_return_object()
+	{
+		return Future_t<T> {std::coroutine_handle<Promise_t<T>>::from_promise(*this)};
+	}
+
+	// ==========================================================
+	// Awaiters
+	// ==========================================================
 	template <typename T, typename CallbackFunc>
 	struct CallbackAwaiter
 	{
-	public:
-		// Constructor to initialize the callback awaiter with a callback function
+		CallbackFunc callback;
+		T result;
+
 		CallbackAwaiter(CallbackFunc fn): callback(std::move(fn)) {}
 
-		// Check if the await operation is ready
-		MOS_INLINE inline bool await_ready() noexcept { return false; }
+		bool await_ready() noexcept { return false; }
 
-		// Suspend the coroutine and call the callback function
-		MOS_INLINE inline void
-		await_suspend(std::coroutine_handle<> handle)
+		void await_suspend(std::coroutine_handle<> handle)
 		{
-			callback([handle = std::move(handle), this](T t) mutable {
+			callback([h = std::move(handle), this](T t) mutable {
 				result = std::move(t);
-				handle.resume();
+				h.resume();
 			});
 		}
 
-		// Resume the await operation and get the result
-		MOS_INLINE inline T
-		await_resume() noexcept { return std::move(result); }
-
-	private:
-		CallbackFunc callback;
-		T result;
+		T await_resume() noexcept { return std::move(result); }
 	};
 
-	// Specialization of CallbackAwaiter for void return type
 	template <typename CallbackFunc>
 	struct CallbackAwaiter<void, CallbackFunc>
 	{
-	public:
+		CallbackFunc callback;
+
 		CallbackAwaiter(CallbackFunc fn): callback(std::move(fn)) {}
 
-		// Check if the await operation is ready
-		MOS_INLINE inline bool
-		await_ready() noexcept { return false; }
+		bool await_ready() noexcept { return false; }
 
-		// Suspend the coroutine and call the callback function
-		MOS_INLINE inline void
-		await_suspend(std::coroutine_handle<> handle)
+		void await_suspend(std::coroutine_handle<> handle)
 		{
-			callback(handle);
+			callback([h = handle]() {
+				if (!h.done()) h.resume();
+			});
 		}
 
-		// Resume the await operation (no-op for void)
-		MOS_INLINE inline void await_resume() noexcept {}
-
-	private:
-		// The callback function
-		CallbackFunc callback;
+		void await_resume() noexcept {}
 	};
 
-	// Wrap a callback function into a callback awaiter
 	template <typename T, typename CallbackFunc>
 	auto callback_wrapper(CallbackFunc callback)
 	{
 		return CallbackAwaiter<T, CallbackFunc> {callback};
 	}
 
+	// ==========================================================
+	// Delay Coroutine
+	// ==========================================================
 	struct DelayAction
 	{
 		Tick_t ticks;
-
-		void operator()(std::coroutine_handle<> handle) const
+		void operator()(Lambda_t task) const
 		{
-			// Delay the execution of the coroutine handle
-			delay_ms(ticks, handle);
+			delay_ms(ticks, std::move(task));
 		}
 	};
 
-	// Delay a coroutine with ticks
-	Future_t<> delay(const Tick_t ticks)
+	inline Future_t<> delay(const Tick_t ticks)
 	{
 		co_return co_await callback_wrapper<void>(DelayAction {ticks});
 	}

@@ -1,0 +1,3 @@
+[submodule "external/etl"]
+	path = external/etl
+	url = https://github.com/ETLCPP/etl.git
