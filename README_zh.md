@@ -23,10 +23,10 @@
 ```
 .
 ├── config.h             // 系统配置
+├── 📁 external          // 外部库
 ├── 📁 arch              // 架构相关
 │   └── cpu.hpp          // 初始化/上下文切换
 │
-├── 📁 external          // 外部库
 ├── 📁 kernel            // 内核代码
 │   ├── macro.hpp        // 常量宏
 │   ├── type.hpp         // 基础类型
