@@ -8,7 +8,11 @@
 // Import ETL Library
 #include "etl/vector.h"
 #include "etl/priority_queue.h"
+
+// Whether to use pool allocator for async
+#if (MOS_CONF_ASYNC_USE_POOL == true)
 #include "etl/pool.h"
+#endif
 
 // -------------------------- MultiMap vs Priority Queue ----------------------------
 // ┌──────────────────┬───────────────────────┬───────────────────────┬─────────────┐
@@ -37,9 +41,6 @@ namespace MOS::Kernel::Async
 {
 	using Task::os_ticks;
 	using Tick_t = Task::Tick_t;
-
-	// If "Async: Frame > Pool Block Size" assert, increase Macro::ASYNC_FRAME_SIZE
-	// If "Async: Pool Full" assert, increase Macro::ASYNC_MAX_POOL
 
 	// ==========================================================
 	// Custom FixedFunction
@@ -234,6 +235,7 @@ namespace MOS::Kernel::Async
 	// Coroutine Infrastructure & Memory Pool
 	// ==========================================================
 
+#if (MOS_CONF_ASYNC_USE_POOL == true)
 	// --- Promise Allocator (Static Memory Pool) ---
 	// Non-template base class to ensure all Promise_t<T> share the same pool
 	struct PromiseAllocator
@@ -251,10 +253,11 @@ namespace MOS::Kernel::Async
 			// Protect pool access from interrupts
 			Utils::IrqGuard_t guard;
 
+			// If "Async: Frame > Pool Block Size" assert, increase Macro::ASYNC_FRAME_SIZE
 			if (size > Macro::ASYNC_FRAME_SIZE) {
 				MOS_ASSERT(false, "Async: Frame > Pool Block Size");
 			}
-			if (pool.full()) {
+			if (pool.full()) { // If "Async: Pool Full" assert, increase Macro::ASYNC_MAX_POOL
 				MOS_ASSERT(false, "Async: Pool Full");
 			}
 
@@ -270,6 +273,7 @@ namespace MOS::Kernel::Async
 			}
 		}
 	};
+#endif
 
 	template <typename T>
 	struct Future_t;
@@ -304,9 +308,14 @@ namespace MOS::Kernel::Async
 		auto await_suspend(std::coroutine_handle<Promise_t<T>> h) noexcept { return h.promise().next; }
 	};
 
-	// Promise_t inherits from Allocator to override new/delete
+	// Promise_t definition
+	// Inherits from Allocator ONLY if MOS_CONF_ASYNC_USE_POOL is defined
 	template <typename T>
-	struct Promise_t : public PromiseRet_t<T>, public PromiseAllocator
+	struct Promise_t : public PromiseRet_t<T>
+#if MOS_CONF_ASYNC_USE_POOL
+	    ,
+	                   public PromiseAllocator
+#endif
 	{
 		std::coroutine_handle<> next;
 

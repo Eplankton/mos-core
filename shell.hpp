@@ -104,6 +104,18 @@ namespace MOS::Shell
 		}
 
 		static inline void
+		time_cmd(Argv_t _)
+		{
+			uint32_t __uptks = (uint32_t) (os_ticks / MOS_CONF_SYSTICK);
+			kprintf(
+			    "========= Uptime: %02u:%02u:%02u =========\n",
+			    (__uptks / 3600),
+			    (__uptks % 3600 / 60),
+			    (__uptks % 60)
+			);
+		}
+
+		static inline void
 		block_cmd(Argv_t argv)
 		{
 			task_ctrl_cmd(
@@ -129,14 +141,15 @@ namespace MOS::Shell
 		}
 
 		static inline void
-		uname_cmd(Argv_t argv)
+		uname_cmd(Argv_t _)
 		{
 			IrqGuard_t guard;
 			kprintf(
-			    " A_A       _  Version @ %s\n"
-			    "o'' )_____//  Build   @ %s, %s\n"
-			    " `_/  MOS  )  Chip    @ %s, %s\n"
+			    " A_A       _  [%s] @ %s\n"
+			    "o'' )_____//  Build @ %s, %s\n"
+			    " `_/  MOS  )  Chip  @ %s, %s\n"
 			    " (_(_/--(_/   2023-2026 Copyright by Eplankton\n",
+			    Global::user_name,
 			    MOS_VERSION,
 			    __TIME__, __DATE__,
 			    MOS_MCU, MOS_ARCH
@@ -151,16 +164,25 @@ namespace MOS::Shell
 		}
 
 		static inline void
+		username_cmd(Argv_t argv)
+		{
+			LOG("User Name => %s", argv);
+			memcpy((void*) Global::user_name, argv, Macro::USER_NAME_SIZE);
+		}
+
+		static inline void
 		help_cmd(Argv_t argv);
 
 		static constexpr Cmd_t sys_cmd_map[] = {
-		    {    "ls",     ls_cmd}, // List all tasks
-		    {  "kill",   kill_cmd}, // Kill a task
-		    { "block",  block_cmd}, // Block a task
-		    {"resume", resume_cmd}, // Resume a task
-		    {  "help",   help_cmd}, // Show help info
-		    { "uname",  uname_cmd}, // Show system info
-		    {"reboot", reboot_cmd}, // Reboot system
+		    {      "ls",       ls_cmd}, // List all tasks
+		    {    "kill",     kill_cmd}, // Kill a task
+		    {   "block",    block_cmd}, // Block a task
+		    {  "resume",   resume_cmd}, // Resume a task
+		    {    "help",     help_cmd}, // Show help info
+		    {    "time",     time_cmd}, // Show system uptime
+		    {   "uname",    uname_cmd}, // Show system info
+		    {  "reboot",   reboot_cmd}, // Reboot system
+		    {"username", username_cmd}, // Set user name
 
 		    // Add more commands to here by {"text", callback}
 		};

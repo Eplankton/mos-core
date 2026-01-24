@@ -4,7 +4,7 @@
 #include "data_type/tcb.hpp"
 #include "data_type/bitmap.hpp"
 
-#if (MOS_CONF_DEBUG_INFO)
+#if (MOS_CONF_DEBUG_INFO == true)
 #define MOS_DEBUG_INFO MOS_USED volatile
 #else
 #define MOS_DEBUG_INFO
@@ -41,6 +41,9 @@ namespace MOS::Kernel::Global
 		// For debug only
 		MOS_DEBUG_INFO
 		DebugTcbs_t debug_tcbs {};
+
+		MOS_DEBUG_INFO
+		char user_name[USER_NAME_SIZE] = MOS_USER_NAME;
 	}
 }
 

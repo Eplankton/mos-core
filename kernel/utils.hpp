@@ -15,18 +15,29 @@
 #define MOS_USED      __attribute__((used))
 #define MOS_PACKED    __attribute__((packed))
 
-#if (MOS_CONF_PRINTF)
+#if (MOS_CONF_PRINTF == true)
 #include "printf.h"
 #define MOS_PUTCHAR       _putchar
 #define kprintf(fmt, ...) printf_(fmt, ##__VA_ARGS__)
-#define LOG(fmt, ...)     kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
+
+#if (MOS_CONF_LOG_TIME == true)
+extern "C" volatile uint32_t os_ticks;
+#define LOG(fmt, ...)                                                                                                  \
+	do {                                                                                                               \
+		uint32_t __uptks = (uint32_t) (os_ticks / MOS_CONF_SYSTICK);                                                   \
+		kprintf("[%02u:%02u:%02u] " fmt "\n", (__uptks / 3600), (__uptks % 3600 / 60), (__uptks % 60), ##__VA_ARGS__); \
+	} while (0)
+#else
+	#define LOG(fmt, ...) kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
+#endif
+
 #else
 #define MOS_PUTCHAR       ((void) 0)
 #define kprintf(fmt, ...) ((void) 0)
 #define LOG(fmt, ...)     ((void) 0)
 #endif
 
-#if (MOS_CONF_ASSERT)
+#if (MOS_CONF_ASSERT == true)
 #define MOS_ASSERT(expr, fmt, ...) \
 	((expr) ? ((void) 0) : mos_assert_failed((uint8_t*) __FILE__, __LINE__, (uint8_t*) __func__, fmt))
 

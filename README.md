@@ -24,8 +24,8 @@
 .
 ├── config.h            // System configuration
 ├── 📁 external         // External Library
-├── 📁 arch             // Architecture-Specific Code
-│   └── cpu.hpp         // Initialization/Context Switch assembly code
+├── 📁 arch             // Architecture-specific
+│   └── cpu.hpp         // Init/Context switching asm
 │
 ├── 📁 kernel           // Kernel code
 │   ├── macro.hpp       // Constant macros

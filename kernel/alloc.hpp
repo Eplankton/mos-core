@@ -22,11 +22,11 @@ namespace MOS::Kernel::Alloc
 			case POOL: {
 				using Global::page_pool;
 
-				// Whether a page is unused
+				// Whether a page is used or not
 				auto unused = [](PageRaw_t raw) {
 					auto ptr = (void*) raw[0]; // ptr = tcb.link.prev
-					return ptr == nullptr ||   // Uninit -> first alloc
-					       ptr == raw;         // Deinit -> tcb is self-linked
+					return (ptr == nullptr) || // Uninit -> never allocated
+					       (ptr == raw);       // Deinited -> tcb.link is self-linked, used once and recycled
 				};
 
 				for (const auto raw: page_pool) {
