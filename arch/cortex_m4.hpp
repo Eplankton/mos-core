@@ -99,7 +99,8 @@
 	"ldr     r0, [r1,#8]\n"   /* Get cur_tcb.sp(new) */  \
 	"ldmia   r0!, {r4-r11}\n" /* Pop core registers. */  \
 	"msr     psp, r0\n"                                  \
-	"cpsie   i\n" /* Enable interrupts */
+	"cpsie   i\n" /* Enable interrupts */                \
+	"bx      lr\n"
 
 #endif
 
