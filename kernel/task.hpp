@@ -116,17 +116,35 @@ namespace MOS::Kernel::Task
 	MOS_INLINE static inline void
 	load_context(TcbPtr_t tcb)
 	{
-		// A descending stack consists of 16 registers as context.
-		// high -> low, descending stack
-		// | xPSR | PC | LR | R12 | R3 | R2 | R1 | R0 | R11 | R10 | R9 | R8 | R7 | R6 | R5 | R4 |
-		tcb->set_sp((uint32_t) &tcb->page.from_bottom(16));
+		// Stack Layout Configuration
+		constexpr bool HAS_FPU      = (MOS_CONF_USE_HARD_FPU == true);
+		constexpr size_t HW_CTX_LEN = 8;                                           // R0-R3, R12, LR, PC, xPSR
+		constexpr size_t SW_CTX_LEN = 8;                                           // R4-R11
+		constexpr size_t TOTAL_LEN  = HW_CTX_LEN + SW_CTX_LEN + (HAS_FPU ? 1 : 0); // +1 for EXC_RETURN
+		constexpr size_t TOP_IDX    = TOTAL_LEN - 1;
+
+		// Allocate stack space (pointer points to the lowest address of the frame)
+		// Initialize Hardware Stack Frame consists of 16 or 17 registers as 'context'.
+		// High -> Low, address descending stack
+		// Layout: | xPSR | PC | LR | R12 | R3 | R2 | R1 | R0 | R11 | R10 | R9 | R8 | R7 | R6 | R5 | R4 |
+		auto* stack = (uint32_t*) &tcb->page.from_bottom(TOTAL_LEN);
+		tcb->set_sp((uint32_t) stack);
 
 		// Set the 'T' bit in stacked xPSR to '1' to notify processor on exception return about the Thumb state.
 		// V6-m and V7-m cores can only support Thumb state so it should always be set to '1'.
-		tcb->set_xpsr((uint32_t) 0x0100'0000);
-		tcb->set_pc((uint32_t) tcb->fn);     // Set the stacked PC as entry
-		tcb->set_lr((uint32_t) exit);        // Call terminate() automatically
-		tcb->set_argv((uint32_t) tcb->argv); // Set arguments to R0
+		stack[TOP_IDX]     = (uint32_t) 0x0100'0000; // xPSR: Thumb State (T-bit = 1)
+		stack[TOP_IDX - 1] = (uint32_t) tcb->fn;     // PC: Task Entry Point
+		stack[TOP_IDX - 2] = (uint32_t) exit;        // LR: Return Address (Task Exit)
+		stack[TOP_IDX - 7] = (uint32_t) tcb->argv;   // R0: Task Argument
+
+		// Initialize Special Registers (if needed)
+		if constexpr (HAS_FPU) {
+			// EXC_RETURN: Thread Mode, PSP, Basic Frame (No FPU context initially)
+			// Located right below R0 (at index 8)
+			stack[SW_CTX_LEN] = 0xFFFF'FFFD;
+		}
+
+		// Software Stack [R4-R11] is left uninitialized
 	}
 
 	namespace // private checker concepts

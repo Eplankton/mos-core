@@ -79,36 +79,6 @@ namespace MOS::Kernel::Scheduler
 	context_switch(void)
 	{
 		asm volatile(ARCH_CONTEXT_SWITCH_ASM);
-
-		// asm volatile("CPSID   I"); /* Disable interrupts */
-
-		// asm volatile("MRS     R0, PSP");
-		// asm volatile("LDR     R3, =cur_tcb");
-		// asm volatile("LDR     R2, [R3]");
-
-		// // asm volatile("tst r14, #0x10                  \n" /* Is using FPU context? */
-		// //              "it eq                           \n"
-		// //              "vstmdbeq r0!, {s16-s31}         \n");
-
-		// asm volatile("STMDB   R0!, {R4-R11}"); /* Save core registers. */
-		// asm volatile("STR     R0, [R2,#8]");   /* Get tcb.sp */
-
-		// asm volatile("STMDB   SP!, {R3,LR}");
-		// asm volatile("BL      next_tcb");
-		// asm volatile("ldmia   SP!, {R3,LR}");
-
-		// asm volatile("LDR     R1, [R3]");
-		// asm volatile("LDR     R0, [R1,#8]");   /* Get tcb.sp */
-		// asm volatile("LDMIA   R0!, {R4-R11}"); /* Pop core registers. */
-
-		// // asm volatile("tst r14, #0x10         \n" /* Is using FPU context? */
-		// //              "it eq                  \n"
-		// //              "vldmiaeq r0!, {s16-s31}");
-
-		// asm volatile("MSR     PSP, R0");
-
-		// asm volatile("CPSIE   I"); /* Enable interrupts */
-		// asm volatile("BX      LR");
 	}
 
 	// Start scheduling
@@ -116,7 +86,7 @@ namespace MOS::Kernel::Scheduler
 	static inline void
 	launch(Hook_t hook = nullptr)
 	{
-		static uint32_t ipb[PAGE_SIZE / 2]; // Idle Page Block
+		static uint32_t ipb[PAGE_SIZE / 2] MOS_DEFAULT_ALIGN; // Idle Page Block
 
 		// Memory space allocated to the idle task
 		Page_t idle_page {

@@ -14,6 +14,13 @@
 #define MOS_NAKED     __attribute__((naked))
 #define MOS_USED      __attribute__((used))
 #define MOS_PACKED    __attribute__((packed))
+#define MOS_ALIGN(x)  __attribute__((aligned(x)))
+
+#if (MOS_CONF_USE_HARD_FPU == true)
+#define MOS_DEFAULT_ALIGN MOS_ALIGN(8)
+#else
+#define MOS_DEFAULT_ALIGN MOS_ALIGN(4)
+#endif
 
 #if (MOS_CONF_PRINTF == true)
 #include "printf.h"
@@ -28,7 +35,7 @@ extern "C" volatile uint32_t os_ticks;
 		kprintf("[%02u:%02u:%02u] " fmt "\n", (__uptks / 3600), (__uptks % 3600 / 60), (__uptks % 60), ##__VA_ARGS__); \
 	} while (0)
 #else
-	#define LOG(fmt, ...) kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
+#define LOG(fmt, ...) kprintf("[LOG]: " fmt "\n", ##__VA_ARGS__)
 #endif
 
 #else
@@ -115,28 +122,28 @@ namespace MOS::Utils
 	inline void*
 	memcpy(void* dest, const void* src, size_t n)
 	{
-	#if defined(__GNUC__) || defined(__msvc__)
+#if defined(__GNUC__) || defined(__msvc__)
 		return __builtin_memcpy(dest, src, n); // Use Bulitin Memcpy
-	#else
+#else
 		// 	for (size_t i = 0; i < n; i++) {
 		// 		((uint8_t*) dest)[i] = ((const uint8_t*) src)[i];
 		// 	}
 		// 	return dest;
-	#endif
+#endif
 	}
 
 	inline void*
 	memset(void* ptr, uint8_t value, size_t n)
 	{
-	#if defined(__GNUC__) || defined(__msvc__)
+#if defined(__GNUC__) || defined(__msvc__)
 		return __builtin_memset(ptr, value, n); // Use Bulitin Memset
-	#else
+#else
 		auto raw = (uint8_t*) ptr;
 		for (size_t i = 0; i < n; i++) {
 			raw[i] = value;
 		}
 		return ptr;
-	#endif
+#endif
 	}
 
 	struct Range

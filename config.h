@@ -9,6 +9,7 @@
 #define MOS_MCU            "STM32F4xx"
 
 // MOS Settings
+#define MOS_CONF_USE_HARD_FPU       true       // Whether to use hardware FPU
 #define MOS_CONF_ASSERT             true       // Whether to use full assert
 #define MOS_CONF_PRINTF             true       // Whether to use printf
 #define MOS_CONF_LOG_TIME           true       // Whether to add timestamp on LOG

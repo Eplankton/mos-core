@@ -20,7 +20,7 @@ namespace MOS::Kernel::Global
 	using Tick_t   = TCB_t::Tick_t;
 	using TcbPtr_t = TCB_t::TcbPtr_t;
 
-	Pool_t page_pool;
+	Pool_t page_pool MOS_DEFAULT_ALIGN;
 	Tids_t tids;
 
 	TcbList_t
