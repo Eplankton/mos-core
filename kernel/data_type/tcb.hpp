@@ -397,7 +397,7 @@ namespace MOS::DataType
 	struct DebugTcbs_t
 	{
 		using TcbPtr_t = TCB_t::TcbPtr_t;
-		using Raw_t    = TcbPtr_t[MAX_TASK_NUM];
+		using Raw_t    = TcbPtr_t[TASK_MAX];
 		using Len_t    = uint32_t;
 		using Tid_t    = TCB_t::Tid_t;
 

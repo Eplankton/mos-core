@@ -16,7 +16,7 @@ namespace MOS::Kernel::Global
 	using namespace DataType;
 
 	using Pool_t   = Page_t::Word_t[POOL_SIZE][PAGE_SIZE];
-	using Tids_t   = BitMap_t<MAX_TASK_NUM>;
+	using Tids_t   = BitMap_t<TASK_MAX>;
 	using Tick_t   = TCB_t::Tick_t;
 	using TcbPtr_t = TCB_t::TcbPtr_t;
 

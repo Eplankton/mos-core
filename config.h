@@ -14,7 +14,7 @@
 #define MOS_CONF_PRINTF             true       // Whether to use printf
 #define MOS_CONF_LOG_TIME           true       // Whether to add timestamp on LOG
 #define MOS_CONF_DEBUG_INFO         true       // Whether to use debug info
-#define MOS_CONF_MAX_TASK_NUM       16         // Maximum number of tasks
+#define MOS_CONF_TASK_MAX           16         // Max Task Number
 #define MOS_CONF_POOL_SIZE          16         // Size of pre-allocated page pool
 #define MOS_CONF_PAGE_SIZE          1024       // Default page size in BYTES
 #define MOS_CONF_SYSTICK            1000       // SystemFrequency / 1000 = every 1ms

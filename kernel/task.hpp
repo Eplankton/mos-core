@@ -117,17 +117,17 @@ namespace MOS::Kernel::Task
 	load_context(TcbPtr_t tcb)
 	{
 		// Stack Layout Configuration
-		constexpr bool HAS_FPU      = (MOS_CONF_USE_HARD_FPU == true);
+		constexpr bool HAS_FPU      = MOS_CONF_USE_HARD_FPU;
 		constexpr size_t HW_CTX_LEN = 8;                                           // R0-R3, R12, LR, PC, xPSR
 		constexpr size_t SW_CTX_LEN = 8;                                           // R4-R11
-		constexpr size_t TOTAL_LEN  = HW_CTX_LEN + SW_CTX_LEN + (HAS_FPU ? 1 : 0); // +1 for EXC_RETURN
+		constexpr size_t TOTAL_LEN  = HW_CTX_LEN + SW_CTX_LEN + (HAS_FPU ? 1 : 0); // extra for EXC_RETURN
 		constexpr size_t TOP_IDX    = TOTAL_LEN - 1;
 
 		// Allocate stack space (pointer points to the lowest address of the frame)
 		// Initialize Hardware Stack Frame consists of 16 or 17 registers as 'context'.
 		// High -> Low, address descending stack
 		// Layout: | xPSR | PC | LR | R12 | R3 | R2 | R1 | R0 | R11 | R10 | R9 | R8 | R7 | R6 | R5 | R4 |
-		auto* stack = (uint32_t*) &tcb->page.from_bottom(TOTAL_LEN);
+		auto stack = &tcb->page.from_bottom(TOTAL_LEN);
 		tcb->set_sp((uint32_t) stack);
 
 		// Set the 'T' bit in stacked xPSR to '1' to notify processor on exception return about the Thumb state.
@@ -217,7 +217,7 @@ namespace MOS::Kernel::Task
 			return nullptr;
 		}
 
-		if (debug_tcbs.size() >= MAX_TASK_NUM) {
+		if (debug_tcbs.size() >= TASK_MAX) {
 			LOG("Max tasks!");
 			return nullptr;
 		}
@@ -463,7 +463,7 @@ namespace MOS::Kernel::Task
 	inline void
 	print_info(
 	    TcbPtr_t tcb,
-	    const char* format = " #%-2d %-10s %-5d %-9s %3d%%\n"
+	    const char* format = " #%-3d %-12s %-5d %-9s %3d%%\n"
 	)
 	{
 		kprintf(
@@ -480,9 +480,9 @@ namespace MOS::Kernel::Task
 	inline void print_all()
 	{
 		IrqGuard_t guard;
-		kprintf("-------------------------------------\n");
+		kprintf("----------------------------------------\n");
 		debug_tcbs.iter([](TcbPtr_t tcb) { print_info(tcb); });
-		kprintf("-------------------------------------\n");
+		kprintf("----------------------------------------\n");
 	}
 
 	void delay(const Tick_t ticks)

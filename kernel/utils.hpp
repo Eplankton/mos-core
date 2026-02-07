@@ -8,19 +8,14 @@
 #define container_of(ptr, type, member) \
 	(type*) ((char*) ptr - offsetof(type, member))
 
-#define MOS_FLATTEN   __attribute__((flatten))
-#define MOS_INLINE    __attribute__((always_inline))
-#define MOS_NO_INLINE __attribute__((noinline))
-#define MOS_NAKED     __attribute__((naked))
-#define MOS_USED      __attribute__((used))
-#define MOS_PACKED    __attribute__((packed))
-#define MOS_ALIGN(x)  __attribute__((aligned(x)))
-
-#if (MOS_CONF_USE_HARD_FPU == true)
-#define MOS_DEFAULT_ALIGN MOS_ALIGN(8)
-#else
-#define MOS_DEFAULT_ALIGN MOS_ALIGN(4)
-#endif
+#define MOS_FLATTEN       __attribute__((flatten))
+#define MOS_INLINE        __attribute__((always_inline))
+#define MOS_NO_INLINE     __attribute__((noinline))
+#define MOS_NAKED         __attribute__((naked))
+#define MOS_USED          __attribute__((used))
+#define MOS_PACKED        __attribute__((packed))
+#define MOS_ALIGN(x)      __attribute__((aligned(x)))
+#define MOS_DEFAULT_ALIGN MOS_ALIGN(8) // !AAPCS! The Stack Pointer (SP) must be 8-byte aligned at all public interface boundaries.
 
 #if (MOS_CONF_PRINTF == true)
 #include "printf.h"
@@ -31,7 +26,7 @@
 extern "C" volatile uint32_t os_ticks;
 #define LOG(fmt, ...)                                                                                                  \
 	do {                                                                                                               \
-		uint32_t __uptks = (uint32_t) (os_ticks / MOS_CONF_SYSTICK);                                                   \
+		const uint32_t __uptks = (os_ticks / MOS_CONF_SYSTICK);                                                        \
 		kprintf("[%02u:%02u:%02u] " fmt "\n", (__uptks / 3600), (__uptks % 3600 / 60), (__uptks % 60), ##__VA_ARGS__); \
 	} while (0)
 #else
@@ -64,11 +59,11 @@ mos_assert_failed(void* file, uint32_t line, void* func, const char* msg)
 namespace MOS::Utils
 {
 	MOS_INLINE inline void
-	portable_delay(uint32_t n)
+	dummy_delay(uint32_t n)
 	{
 		while (n > 0) {
 			MOS_NOP();
-			n = n - 1;
+			n -= 1;
 		}
 	}
 
@@ -78,7 +73,7 @@ namespace MOS::Utils
 	    const uint32_t unit = 2000
 	)
 	{
-		portable_delay(n * unit);
+		dummy_delay(n * unit);
 	}
 
 	MOS_INLINE inline bool
@@ -125,10 +120,10 @@ namespace MOS::Utils
 #if defined(__GNUC__) || defined(__msvc__)
 		return __builtin_memcpy(dest, src, n); // Use Bulitin Memcpy
 #else
-		// 	for (size_t i = 0; i < n; i++) {
-		// 		((uint8_t*) dest)[i] = ((const uint8_t*) src)[i];
-		// 	}
-		// 	return dest;
+		for (size_t i = 0; i < n; i++) {
+			((uint8_t*) dest)[i] = ((const uint8_t*) src)[i];
+		}
+		return dest;
 #endif
 	}
 

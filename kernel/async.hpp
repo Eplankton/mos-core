@@ -39,7 +39,8 @@
 
 namespace MOS::Kernel::Async
 {
-	using Tick_t = Task::Tick_t;
+	using Task::Tick_t;
+	using Utils::IrqGuard_t;
 
 	template <typename P = void>
 	using CoroHandle_t = std::coroutine_handle<P>;
@@ -168,7 +169,7 @@ namespace MOS::Kernel::Async
 			// Disable interrupts during the switch to prevent 'post' from writing simultaneously.
 			uint8_t read_idx;
 			{
-				Utils::IrqGuard_t guard;
+				IrqGuard_t guard;
 				if (task_buffers[write_idx].empty()) return false; // No tasks submitted
 
 				read_idx  = write_idx;  // Prepare to read current accumulated tasks
@@ -187,7 +188,9 @@ namespace MOS::Kernel::Async
 
 		static void post(Lambda_t fn)
 		{
-			Utils::IrqGuard_t guard;
+			IrqGuard_t guard;
+
+			// Try to load into buffers, with Happy Path -> O(1)
 			if (!task_buffers[write_idx].full()) {
 				task_buffers[write_idx].push_back(std::move(fn));
 			}
@@ -198,7 +201,7 @@ namespace MOS::Kernel::Async
 
 		static void add_sleeper(uint32_t ms, Lambda_t fn)
 		{
-			Utils::IrqGuard_t guard;
+			IrqGuard_t guard;
 			if (!sleepers.full()) {
 				sleepers.push(Sleeper_t {os_ticks + ms, std::move(fn)});
 			}
@@ -212,14 +215,14 @@ namespace MOS::Kernel::Async
 		{
 			uint32_t wake_tick;
 			Lambda_t task;
-		};
 
-		struct SleeperCompare
-		{
-			bool operator()(const Sleeper_t& lhs, const Sleeper_t& rhs) const
+			struct Compare
 			{
-				return lhs.wake_tick > rhs.wake_tick;
-			}
+				bool operator()(const Sleeper_t& lhs, const Sleeper_t& rhs) const
+				{
+					return lhs.wake_tick > rhs.wake_tick;
+				}
+			};
 		};
 
 		// Data structure definitions
@@ -228,17 +231,16 @@ namespace MOS::Kernel::Async
 		    Sleeper_t,
 		    Macro::ASYNC_TASK_MAX,
 		    etl::vector<Sleeper_t, Macro::ASYNC_TASK_MAX>,
-		    SleeperCompare>;
+		    Sleeper_t::Compare>;
 
 		// Static members: Stored in .bss/.data segments, does not consume stack.
-		// Double buffers: Index 0 and 1
-		static inline TaskBuffer_t task_buffers[2];
+		static inline TaskBuffer_t task_buffers[2]; // Double buffers: Index 0 and 1
 		static inline volatile uint8_t write_idx = 0;
 		static inline SleepBuffer_t sleepers;
 
 		static void clean_sleepers()
 		{
-			Utils::IrqGuard_t guard;
+			IrqGuard_t guard;
 			const auto now = os_ticks;
 			while (!sleepers.empty()) {
 				// Access by reference to avoid copying
@@ -300,7 +302,7 @@ namespace MOS::Kernel::Async
 		static void* operator new(size_t size)
 		{
 			// Protect pool access from interrupts
-			Utils::IrqGuard_t guard;
+			IrqGuard_t guard;
 			// If "Async: Frame > Pool Block Size" assert, increase Macro::ASYNC_FRAME_SIZE
 			if (size > Macro::ASYNC_FRAME_SIZE) {
 				MOS_ASSERT(false, "Async: Frame > Pool Block Size");
@@ -313,7 +315,7 @@ namespace MOS::Kernel::Async
 		// Overload operator delete for Coroutines
 		static void operator delete(void* ptr, size_t) noexcept
 		{
-			Utils::IrqGuard_t guard;
+			IrqGuard_t guard;
 			if (ptr) {
 				pool.release(static_cast<FrameBlock*>(ptr));
 			}
@@ -421,8 +423,14 @@ namespace MOS::Kernel::Async
 		inline void detach()
 		{
 			// Simple self-destroying coroutine.
-			// Releases handle ownership to prevent destroy() during destructor.
-			handle = nullptr;
+			if (handle) {
+				if (!handle.done()) {
+					handle.resume();
+				}
+
+				// Releases handle ownership to prevent destroy() during destructor.
+				handle = nullptr;
+			}
 		}
 	};
 
