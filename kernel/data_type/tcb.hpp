@@ -157,8 +157,10 @@ namespace MOS::DataType
 		MOS_INLINE inline void // Used in Mutex
 		store_pri(Prior_t new_pri) volatile
 		{
-			if (sub_pri == PRI_INV) {
-				sub_pri = pri;
+			if (new_pri < pri) {
+				if (sub_pri == PRI_INV) {
+					sub_pri = pri; // Backup
+				}
 				set_pri(new_pri);
 			}
 		}

@@ -39,6 +39,7 @@
 
 namespace MOS::Kernel::Async
 {
+	using namespace Macro;
 	using Task::Tick_t;
 	using Utils::IrqGuard_t;
 
@@ -53,17 +54,17 @@ namespace MOS::Kernel::Async
 	// Added 'noexcept' to reduce stack overhead for exception handling.
 	// Explicit memory alignment added for cross-platform stability.
 	template <size_t MAX_SIZE>
-	class FixedFunction_t
+	class FixedFn_t
 	{
 	public:
 		using Invoker_t = void (*)(void*);
 		using Cloner_t  = void (*)(void* dest, const void* src);
 		using Buffer_t  = char[MAX_SIZE];
 
-		FixedFunction_t() noexcept: invoker(nullptr), cloner(nullptr) {}
+		FixedFn_t() noexcept: invoker(nullptr), cloner(nullptr) {}
 
 		template <typename F>
-		FixedFunction_t(F f) noexcept
+		FixedFn_t(F f) noexcept
 		{
 			static_assert(sizeof(F) <= MAX_SIZE, "Lambda too large for Async!");
 			new (buffer) F(std::move(f)); // Use placement new to construct object
@@ -73,16 +74,16 @@ namespace MOS::Kernel::Async
 			cloner = [](void* dest, const void* src) { new (dest) F(*reinterpret_cast<const F*>(src)); };
 		}
 
-		FixedFunction_t(const FixedFunction_t& other) noexcept { copy_from(other); }
-		FixedFunction_t(FixedFunction_t&& other) noexcept { move_from(std::move(other)); }
+		FixedFn_t(const FixedFn_t& other) noexcept { copy_from(other); }
+		FixedFn_t(FixedFn_t&& other) noexcept { move_from(std::move(other)); }
 
-		FixedFunction_t& operator=(const FixedFunction_t& other) noexcept
+		FixedFn_t& operator=(const FixedFn_t& other) noexcept
 		{
 			if (this != &other) copy_from(other);
 			return *this;
 		}
 
-		FixedFunction_t& operator=(FixedFunction_t&& other) noexcept
+		FixedFn_t& operator=(FixedFn_t&& other) noexcept
 		{
 			if (this != &other) move_from(std::move(other));
 			return *this;
@@ -100,7 +101,7 @@ namespace MOS::Kernel::Async
 		Invoker_t invoker;
 		Cloner_t cloner;
 
-		void copy_from(const FixedFunction_t& other)
+		void copy_from(const FixedFn_t& other)
 		{
 			if (other.invoker) {
 				other.cloner(buffer, other.buffer);
@@ -113,7 +114,7 @@ namespace MOS::Kernel::Async
 			}
 		}
 
-		void move_from(FixedFunction_t&& other)
+		void move_from(FixedFn_t&& other)
 		{
 			if (other.invoker) {
 				// Use memcpy for POD data movement, which is faster than cloner
@@ -130,7 +131,7 @@ namespace MOS::Kernel::Async
 		}
 	};
 
-	using Lambda_t = FixedFunction_t<Macro::ASYNC_TASK_SIZE>;
+	using Lambda_t = FixedFn_t<ASYNC_TASK_SIZE>;
 
 	// ==========================================================
 	// Static Executor Implementation
@@ -151,7 +152,7 @@ namespace MOS::Kernel::Async
 				};
 
 				// Create a single task for Executor
-				if (Task::create(async_exec, nullptr, (Macro::PRI_MIN / 2), "async/exec")) {
+				if (Task::create(async_exec, nullptr, (PRI_MIN / 2), "async/exec")) {
 					init_flag = true;
 				}
 				else {
@@ -226,14 +227,14 @@ namespace MOS::Kernel::Async
 		};
 
 		// Data structure definitions
-		using TaskBuffer_t  = etl::vector<Lambda_t, Macro::ASYNC_TASK_MAX>;
+		using TaskBuffer_t  = etl::vector<Lambda_t, ASYNC_TASK_MAX>;
 		using SleepBuffer_t = etl::priority_queue<
 		    Sleeper_t,
-		    Macro::ASYNC_TASK_MAX,
-		    etl::vector<Sleeper_t, Macro::ASYNC_TASK_MAX>,
+		    ASYNC_TASK_MAX,
+		    etl::vector<Sleeper_t, ASYNC_TASK_MAX>,
 		    Sleeper_t::Compare>;
 
-		// Static members: Stored in .bss/.data segments, does not consume stack.
+		// Static members: Stored in .bss/.data segments.
 		static inline TaskBuffer_t task_buffers[2]; // Double buffers: Index 0 and 1
 		static inline volatile uint8_t write_idx = 0;
 		static inline SleepBuffer_t sleepers;
@@ -292,11 +293,11 @@ namespace MOS::Kernel::Async
 	{
 		struct FrameBlock
 		{
-			alignas(std::max_align_t) char data[Macro::ASYNC_FRAME_SIZE];
+			alignas(std::max_align_t) char data[ASYNC_FRAME_SIZE];
 		};
 
 		// Static Pool Object
-		static inline etl::pool<FrameBlock, Macro::ASYNC_POOL_MAX> pool;
+		static inline etl::pool<FrameBlock, ASYNC_POOL_MAX> pool;
 
 		// Overload operator new for Coroutines
 		static void* operator new(size_t size)
@@ -304,7 +305,7 @@ namespace MOS::Kernel::Async
 			// Protect pool access from interrupts
 			IrqGuard_t guard;
 			// If "Async: Frame > Pool Block Size" assert, increase Macro::ASYNC_FRAME_SIZE
-			if (size > Macro::ASYNC_FRAME_SIZE) {
+			if (size > ASYNC_FRAME_SIZE) {
 				MOS_ASSERT(false, "Async: Frame > Pool Block Size");
 			}
 			if (pool.full()) { // If "Async: Pool Full" assert, increase Macro::ASYNC_POOL_MAX
@@ -331,13 +332,16 @@ namespace MOS::Kernel::Async
 	template <typename T>
 	struct PromiseRet_t
 	{
-		T value;
 		template <typename U>
 		void return_value(U&& val) noexcept
 		{
 			value = std::forward<U>(val);
 		}
+
 		T get_value() const { return value; }
+
+	private:
+		T value;
 	};
 
 	template <>
@@ -345,19 +349,6 @@ namespace MOS::Kernel::Async
 	{
 		void return_void() noexcept {}
 		void get_value() const {}
-	};
-
-	template <typename T>
-	struct FutureFinal_t
-	{
-		Promise_t<T>* source;
-		bool await_ready() noexcept { return !source->next; }
-		void await_resume() noexcept { source->get_value(); }
-
-		auto await_suspend(CoroHandle_t<Promise_t<T>> h) noexcept
-		{ // Use handle passing to avoid recursive stack
-			return h.promise().next;
-		}
 	};
 
 	// Promise_t definition
@@ -371,16 +362,35 @@ namespace MOS::Kernel::Async
 	{
 		CoroHandle_t<> next = nullptr;
 
-		Future_t<T> get_return_object();
-		auto initial_suspend() noexcept { return std::suspend_always {}; }
-		auto final_suspend() noexcept { return FutureFinal_t<T> {this}; }
 		void unhandled_exception() noexcept {}
+		auto initial_suspend() noexcept { return std::suspend_always {}; }
+		auto final_suspend() noexcept { return FutureFinal_t {this}; }
+		auto get_return_object()
+		{
+			return Future_t<T> {CoroHandle_t<Promise_t<T>>::from_promise(*this)};
+		}
+
+	private:
+		struct FutureFinal_t
+		{
+			Promise_t<T>* source;
+
+			bool await_ready() noexcept { return !source->next; }
+			void await_resume() noexcept { source->get_value(); }
+
+			auto await_suspend(CoroHandle_t<Promise_t<T>> h) noexcept
+			{ // Use handle passing to avoid recursive stack
+				return h.promise().next;
+			}
+		};
 	};
 
 	template <typename T = void>
 	struct Future_t
 	{
-		using promise_type = Promise_t<T>;
+		// For C++ Coroutine Requirements
+		using promise_type = Promise_t<T>; // Must NOT change `promise_type` name
+
 		CoroHandle_t<promise_type> handle;
 
 		explicit Future_t(CoroHandle_t<promise_type> h) noexcept: handle(h) {}
@@ -437,12 +447,6 @@ namespace MOS::Kernel::Async
 	template <typename T>
 	Future_t(T) -> Future_t<T>;
 
-	template <typename T>
-	Future_t<T> Promise_t<T>::get_return_object()
-	{
-		return Future_t<T> {CoroHandle_t<Promise_t<T>>::from_promise(*this)};
-	}
-
 	// ==========================================================
 	// Awaiters
 	// ==========================================================
@@ -487,22 +491,12 @@ namespace MOS::Kernel::Async
 		return CallbackAwaiter<T, CallbackFunc> {std::move(callback)};
 	}
 
-	// ==========================================================
 	// Delay Coroutine
-	// ==========================================================
-	struct DelayAction
-	{
-		Tick_t ticks;
-		void operator()(Lambda_t task) const
-		{
-			delay_ms(ticks, std::move(task));
-		}
-	};
-
 	inline Future_t<> delay(const Tick_t ticks)
 	{
-		// All wrappers are temporary objects moved into awaiter, avoiding stack residue.
-		co_return co_await callback_wrapper<void>(DelayAction {ticks});
+		co_return co_await callback_wrapper<void>([ticks](Lambda_t task) {
+			delay_ms(ticks, std::move(task));
+		});
 	}
 }
 
